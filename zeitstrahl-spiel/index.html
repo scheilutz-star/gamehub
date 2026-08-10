@@ -117,10 +117,13 @@
 
     <!-- Editor Screen -->
     <div id="screen-editor" class="hidden flex-1 flex flex-col p-6 max-w-6xl mx-auto w-full">
-        <div class="flex justify-between items-center mb-6">
+        <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
             <h2 class="text-3xl font-bold text-cyanAccent"><i class="fa-solid fa-pen-to-square"></i> Zeitstrahl-Editor</h2>
-            <div class="space-x-3">
-                <button onclick="App.toggleEditor()" class="px-6 py-2 bg-deepPurple hover:bg-purple-600 rounded-lg font-bold">Fertig</button>
+            <div class="space-x-2 flex items-center flex-wrap gap-2">
+                <input type="file" id="import-file" accept=".json" class="hidden" onchange="Editor.importJSON(event)">
+                <button onclick="document.getElementById('import-file').click()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-bold text-sm transition"><i class="fa-solid fa-file-import"></i> JSON Import</button>
+                <button onclick="Editor.exportJSON()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-bold text-sm transition"><i class="fa-solid fa-file-export"></i> JSON Export</button>
+                <button onclick="App.toggleEditor()" class="px-6 py-2 bg-deepPurple hover:bg-purple-600 rounded-lg font-bold transition">Fertig</button>
             </div>
         </div>
         <div class="glass p-6 rounded-2xl flex-1 overflow-y-auto">
@@ -287,6 +290,7 @@
             currentPlayerId: null
         };
 
+        // --- GEÄNDERT: Storage Objekt repariert fehlerhafte Daten nun automatisch ---
         const Storage = {
             getKey: () => 'zeitstrahl_data',
             getFallback() {
@@ -295,18 +299,37 @@
                         name: "Beispiel: Meilensteine",
                         labels: ["2000", "2010", "2020"],
                         items: [
-                            { id: "i1", name: "PS2 Release", correct: "2000", placed: null },
-                            { id: "i2", name: "iPad Release", correct: "2010", placed: null },
-                            { id: "i3", name: "PS5 Release", correct: "2020", placed: null }
+                            { id: "i1", name: "PS2 Release", imgUrl: "", correct: "2000", placed: null },
+                            { id: "i2", name: "iPad Release", imgUrl: "", correct: "2010", placed: null },
+                            { id: "i3", name: "PS5 Release", imgUrl: "", correct: "2020", placed: null }
                         ]
                     }
                 ];
             },
             load() {
                 try {
-                    const data = localStorage.getItem(this.getKey());
-                    if (data) return JSON.parse(data);
-                } catch(e) {}
+                    const rawData = localStorage.getItem(this.getKey());
+                    if (rawData) {
+                        let parsed = JSON.parse(rawData);
+                        if (Array.isArray(parsed)) {
+                            // Fehlerhafte/Lückenhafte JSON-Strukturen zwingend korrigieren
+                            parsed = parsed.map(tl => ({
+                                name: tl.name || "Unbenannter Zeitstrahl",
+                                labels: Array.isArray(tl.labels) ? tl.labels : (tl.labels ? [tl.labels] : ["Start"]),
+                                items: Array.isArray(tl.items) ? tl.items.map(i => ({
+                                    id: i.id || Math.random().toString(36).substr(2, 9),
+                                    name: i.name || "",
+                                    imgUrl: i.imgUrl || "",
+                                    correct: i.correct || "",
+                                    placed: null
+                                })) : []
+                            }));
+                            return parsed;
+                        }
+                    }
+                } catch(e) {
+                    console.warn("Konnte Daten nicht parsen, lade Fallback.", e);
+                }
                 const fallback = this.getFallback();
                 this.save(fallback);
                 return fallback;
@@ -345,10 +368,16 @@
                     
                     tl.items.forEach((item, iIdx) => {
                         itemsHtml += `
-                            <div class="flex gap-2 items-center mb-2">
-                                <input type="text" value="${item.name}" placeholder="Element (z.B. PS2)" oninput="Editor.updateItem(${tlIdx}, ${iIdx}, 'name', this.value)" class="flex-1 bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:border-cyanAccent">
-                                <input type="text" value="${item.correct}" placeholder="Zugehöriges Label" oninput="Editor.updateItem(${tlIdx}, ${iIdx}, 'correct', this.value)" class="flex-1 bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:border-cyanAccent">
-                                <button onclick="Editor.deleteItem(${tlIdx}, ${iIdx})" class="text-red-500 hover:text-red-400 p-2"><i class="fa-solid fa-trash"></i></button>
+                            <div class="flex flex-col gap-2 mb-3 bg-gray-900/50 p-3 rounded-lg border border-gray-700">
+                                <div class="flex gap-2 items-center">
+                                    <input type="text" value="${item.name || ''}" placeholder="Bezeichnung (z.B. PS2)" oninput="Editor.updateItem(${tlIdx}, ${iIdx}, 'name', this.value)" class="flex-1 bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:border-cyanAccent">
+                                    <input type="text" value="${item.correct || ''}" placeholder="Zugehöriges Label (z.B. 2000)" oninput="Editor.updateItem(${tlIdx}, ${iIdx}, 'correct', this.value)" class="flex-1 bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:border-cyanAccent">
+                                    <button onclick="Editor.deleteItem(${tlIdx}, ${iIdx})" class="text-red-500 hover:text-red-400 p-2"><i class="fa-solid fa-trash"></i></button>
+                                </div>
+                                <div class="flex gap-2 items-center">
+                                    <i class="fa-solid fa-image text-gray-500 ml-1"></i>
+                                    <input type="text" value="${item.imgUrl || ''}" placeholder="Optionale Bild-URL (statt Text-Anzeige)" oninput="Editor.updateItem(${tlIdx}, ${iIdx}, 'imgUrl', this.value)" class="flex-1 bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:border-cyanAccent">
+                                </div>
                             </div>
                         `;
                     });
@@ -402,7 +431,7 @@
             },
             addItem(idx) {
                 const data = Storage.load();
-                data[idx].items.push({ id: Math.random().toString(36).substr(2, 9), name: "", correct: data[idx].labels[0] || "", placed: null });
+                data[idx].items.push({ id: Math.random().toString(36).substr(2, 9), name: "", imgUrl: "", correct: data[idx].labels[0] || "", placed: null });
                 Storage.save(data);
                 this.render();
             },
@@ -416,6 +445,54 @@
                 data[tlIdx].items.splice(iIdx, 1);
                 Storage.save(data);
                 this.render();
+            },
+            exportJSON() {
+                const data = Storage.load();
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
+                const anchor = document.createElement('a');
+                anchor.setAttribute("href", dataStr);
+                anchor.setAttribute("download", "zeitstrahl_quiz_daten.json");
+                document.body.appendChild(anchor);
+                anchor.click();
+                anchor.remove();
+            },
+
+            // --- GEÄNDERT: Import repariert und überprüft jetzt Daten, BEVOR sie gespeichert werden ---
+            importJSON(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        let data = JSON.parse(e.target.result);
+                        if (Array.isArray(data)) {
+                            
+                            // Struktur VOR dem Speichern überprüfen und sichern
+                            data = data.map(tl => ({
+                                name: tl.name || "Importiert",
+                                labels: Array.isArray(tl.labels) ? tl.labels : [],
+                                items: Array.isArray(tl.items) ? tl.items.map(i => ({
+                                    id: i.id || Math.random().toString(36).substr(2, 9),
+                                    name: i.name || "",
+                                    imgUrl: i.imgUrl || "",
+                                    correct: i.correct || "",
+                                    placed: null
+                                })) : []
+                            }));
+
+                            Storage.save(data);
+                            Editor.render();
+                            UI.showToast('<i class="fa-solid fa-file-import"></i> JSON erfolgreich geladen!', 'success');
+                        } else {
+                            UI.showToast('Fehlerhaftes Format: Array erwartet!', 'error');
+                        }
+                    } catch (err) {
+                        UI.showToast('Fehler beim Lesen der JSON-Datei!', 'error');
+                        console.error(err);
+                    }
+                    event.target.value = ''; // Reset input
+                };
+                reader.readAsText(file);
             }
         };
 
@@ -461,11 +538,20 @@
                 }).catch(() => { UI.showToast('Fehler beim Kopieren', 'error'); });
             },
 
+            // --- GEÄNDERT: Try/Catch Failsafe, falls der Editor trotzdem jemals crashen sollte ---
             toggleEditor() {
                 const editorScreen = document.getElementById('screen-editor');
                 if(editorScreen.classList.contains('hidden')) {
-                    Editor.render();
-                    UI.show('screen-editor');
+                    try {
+                        Editor.render();
+                        UI.show('screen-editor');
+                    } catch (err) {
+                        console.error("Editor Crash:", err);
+                        UI.showToast('Kritischer Fehler! Defekte Daten wurden zurückgesetzt.', 'error');
+                        Storage.save(Storage.getFallback()); // Notfall-Wiederherstellung
+                        Editor.render();
+                        UI.show('screen-editor');
+                    }
                 } else {
                     UI.show('screen-host-lobby');
                 }
@@ -503,18 +589,23 @@
                 if(!container || !tl) return;
 
                 let html = `
-                <div class="relative flex justify-start items-stretch pt-8 pb-4 px-10 gap-8 min-w-full w-max" style="min-height: 100%;">
+                <div class="relative flex items-stretch pt-8 pb-4 px-10 gap-8 min-w-full w-max mx-auto" style="min-height: 100%; justify-content: safe center;">
                     <div class="absolute left-10 right-10 top-[82px] h-1.5 bg-gradient-to-r from-gray-700 via-deepPurple to-gray-700 rounded-full z-0"></div>
                 `;
 
                 tl.labels.forEach((label) => {
                     const itemsHere = tl.items.filter(i => i.placed === label);
                     
-                    let itemsHtml = itemsHere.map(i => `
-                        <div class="item-card bg-gradient-to-r from-deepPurple to-purple-600 text-white px-3 py-2 rounded-lg text-xs md:text-sm font-bold text-center shadow-lg w-full break-words border border-purple-400/30 mb-2">
-                            <i class="fa-solid fa-tag text-cyanAccent mr-1"></i>${i.name}
-                        </div>
-                    `).join('');
+                    let itemsHtml = itemsHere.map(i => {
+                        const hasImg = i.imgUrl && i.imgUrl.trim() !== '';
+                        const content = hasImg 
+                            ? `<img src="${i.imgUrl}" class="max-h-20 w-auto object-contain rounded bg-white/10" draggable="false" alt="${i.name}">` 
+                            : `<i class="fa-solid fa-tag text-cyanAccent mr-1"></i>${i.name}`;
+                            
+                        return `<div class="item-card bg-gradient-to-r from-deepPurple to-purple-600 text-white px-3 py-2 rounded-lg text-xs md:text-sm font-bold text-center shadow-lg w-full break-words border border-purple-400/30 mb-2 flex items-center justify-center min-h-[40px]">
+                            ${content}
+                        </div>`;
+                    }).join('');
                     
                     const dropAttrs = isHost ? `
                         ondragover="Host.handleDragOver(event)"
@@ -551,8 +642,14 @@
                 container.innerHTML = unplaced.map(i => {
                     const dragAttrs = isHost ? `draggable="true" ondragstart="Host.handleDragStart(event, '${i.id}')"` : '';
                     const hostStyles = isHost ? 'cursor-grab active:cursor-grabbing hover:scale-105 hover:bg-purple-600 transition-all select-none' : 'cursor-default';
-                    return `<div class="item-card unplaced ${hostStyles}" ${dragAttrs}>
-                        ${isHost ? '<i class="fa-solid fa-grip-vertical text-cyanAccent opacity-70"></i>' : '<i class="fa-solid fa-cube text-cyanAccent/80"></i>'}${i.name}
+                    const hasImg = i.imgUrl && i.imgUrl.trim() !== '';
+                    
+                    const content = hasImg 
+                        ? `<img src="${i.imgUrl}" class="max-h-16 w-auto object-contain rounded bg-white/5 p-1" draggable="false" alt="${i.name}">` 
+                        : `${isHost ? '<i class="fa-solid fa-grip-vertical text-cyanAccent opacity-70 mr-2"></i>' : '<i class="fa-solid fa-cube text-cyanAccent/80 mr-2"></i>'}${i.name}`;
+
+                    return `<div class="item-card unplaced flex items-center justify-center ${hostStyles}" ${dragAttrs}>
+                        ${content}
                     </div>`;
                 }).join('');
             }
@@ -620,7 +717,7 @@
 
                 const itemSel = document.getElementById('mod-item-select');
                 const unplaced = tl.items.filter(i => i.placed === null);
-                itemSel.innerHTML = unplaced.map(i => `<option value="${i.id}">${i.name}</option>`).join('');
+                itemSel.innerHTML = unplaced.map(i => `<option value="${i.id}">${i.name || '(Bildelement)'}</option>`).join('');
                 
                 const posSel = document.getElementById('mod-position-select');
                 posSel.innerHTML = tl.labels.map(l => `<option value="${l}">${l}</option>`).join('');
@@ -710,7 +807,6 @@
 
                 Host.broadcast({ type: 'score_update', scores: Object.fromEntries(Object.entries(AppState.connections).map(([k,v]) => [k, v.score])) });
                 
-                // Prüfen ob der Zeitstrahl komplett gelöst wurde
                 const unplacedLeft = tl.items.filter(i => i.placed === null).length;
                 if (unplacedLeft === 0) {
                     setTimeout(() => {
