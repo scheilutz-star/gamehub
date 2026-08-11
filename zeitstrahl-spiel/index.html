@@ -59,8 +59,6 @@
 
     <!-- Role Selection Screen -->
     <div id="screen-role" class="flex-1 flex items-center justify-center p-6 relative">
-        
-        <!-- ZURÜCK ZUM GAMEHUB BUTTON -->
         <a href="https://scheilutz-star.github.io/gamehub/" class="absolute top-4 left-4 sm:top-6 sm:left-6 text-gray-400 hover:text-cyanAccent transition-all duration-300 flex items-center gap-2 font-bold bg-gray-900/60 py-2 px-3 sm:py-3 sm:px-4 rounded-xl border border-gray-700/80 hover:bg-gray-800 hover:scale-105 shadow-lg z-50 backdrop-blur-sm">
             <i class="fa-solid fa-arrow-left"></i> <span class="hidden sm:inline">Gamehub</span>
         </a>
@@ -188,7 +186,10 @@
 
                 <button onclick="Host.nextTimeline()" class="w-full py-3 bg-deepPurple hover:bg-purple-600 text-white rounded-lg font-bold transition mb-4 shadow-lg shadow-purple-900/50">Nächster Zeitstrahl <i class="fa-solid fa-arrow-right ml-2"></i></button>
 
-                <h3 class="text-lg font-bold text-gray-300 mt-auto mb-2 border-b border-gray-700 pb-2">Punkte & Spieler</h3>
+                <h3 class="text-lg font-bold text-gray-300 mt-auto mb-2 border-b border-gray-700 pb-2 flex justify-between items-center">
+                    <span>Punkte & Spieler</span>
+                    <span class="text-xs text-gray-400 font-normal">Klick auf Pkt zum Editieren</span>
+                </h3>
                 <div id="host-live-scores" class="flex flex-col gap-2 overflow-y-auto max-h-48"></div>
             </div>
         </div>
@@ -296,7 +297,6 @@
             currentPlayerId: null
         };
 
-        // --- GEÄNDERT: Storage Objekt repariert fehlerhafte Daten nun automatisch ---
         const Storage = {
             getKey: () => 'zeitstrahl_data',
             getFallback() {
@@ -318,7 +318,6 @@
                     if (rawData) {
                         let parsed = JSON.parse(rawData);
                         if (Array.isArray(parsed)) {
-                            // Fehlerhafte/Lückenhafte JSON-Strukturen zwingend korrigieren
                             parsed = parsed.map(tl => ({
                                 name: tl.name || "Unbenannter Zeitstrahl",
                                 labels: Array.isArray(tl.labels) ? tl.labels : (tl.labels ? [tl.labels] : ["Start"]),
@@ -462,8 +461,6 @@
                 anchor.click();
                 anchor.remove();
             },
-
-            // --- GEÄNDERT: Import repariert und überprüft jetzt Daten, BEVOR sie gespeichert werden ---
             importJSON(event) {
                 const file = event.target.files[0];
                 if (!file) return;
@@ -472,8 +469,6 @@
                     try {
                         let data = JSON.parse(e.target.result);
                         if (Array.isArray(data)) {
-                            
-                            // Struktur VOR dem Speichern überprüfen und sichern
                             data = data.map(tl => ({
                                 name: tl.name || "Importiert",
                                 labels: Array.isArray(tl.labels) ? tl.labels : [],
@@ -496,7 +491,7 @@
                         UI.showToast('Fehler beim Lesen der JSON-Datei!', 'error');
                         console.error(err);
                     }
-                    event.target.value = ''; // Reset input
+                    event.target.value = '';
                 };
                 reader.readAsText(file);
             }
@@ -544,7 +539,6 @@
                 }).catch(() => { UI.showToast('Fehler beim Kopieren', 'error'); });
             },
 
-            // --- GEÄNDERT: Try/Catch Failsafe, falls der Editor trotzdem jemals crashen sollte ---
             toggleEditor() {
                 const editorScreen = document.getElementById('screen-editor');
                 if(editorScreen.classList.contains('hidden')) {
@@ -554,7 +548,7 @@
                     } catch (err) {
                         console.error("Editor Crash:", err);
                         UI.showToast('Kritischer Fehler! Defekte Daten wurden zurückgesetzt.', 'error');
-                        Storage.save(Storage.getFallback()); // Notfall-Wiederherstellung
+                        Storage.save(Storage.getFallback());
                         Editor.render();
                         UI.show('screen-editor');
                     }
@@ -674,22 +668,80 @@
                     }
                 });
                 conn.on('close', () => { 
-                    delete AppState.connections[conn.peer];
-                    Host.updatePlayerList(); 
+                    if (AppState.connections[conn.peer]) {
+                        delete AppState.connections[conn.peer];
+                        Host.updatePlayerList(); 
+                    }
+                });
+            },
+
+            // Spieler Kicken-Logik
+            kickPlayer(peerId) {
+                const player = AppState.connections[peerId];
+                if (!player) return;
+
+                if (confirm(`${player.name} wirklich kicken?`)) {
+                    if (player.conn && player.conn.open) {
+                        player.conn.send({ type: 'kicked' });
+                        player.conn.close();
+                    }
+                    delete AppState.connections[peerId];
+                    UI.showToast(`<i class="fa-solid fa-user-minus"></i> ${player.name} wurde gekickt.`, 'error');
+
+                    if (AppState.gameStarted) {
+                        if (AppState.currentPlayerId === peerId) {
+                            Host.nextPlayer();
+                        } else {
+                            Host.renderBoard();
+                            Host.broadcastState();
+                        }
+                    } else {
+                        Host.updatePlayerList();
+                    }
+                }
+            },
+
+            // Punktestand manuell anpassen
+            adjustScore(peerId, delta) {
+                const player = AppState.connections[peerId];
+                if (!player) return;
+                player.score += delta;
+                Host.broadcastScoreUpdate();
+                Host.renderLiveScores();
+            },
+
+            setScore(peerId) {
+                const player = AppState.connections[peerId];
+                if (!player) return;
+                const newScore = prompt(`Neuer Punktestand für ${player.name}:`, player.score);
+                if (newScore !== null && !isNaN(parseInt(newScore))) {
+                    player.score = parseInt(newScore, 10);
+                    Host.broadcastScoreUpdate();
+                    Host.renderLiveScores();
+                }
+            },
+
+            broadcastScoreUpdate() {
+                Host.broadcast({ 
+                    type: 'score_update', 
+                    scores: Object.fromEntries(Object.entries(AppState.connections).map(([k,v]) => [k, v.score])) 
                 });
             },
 
             updatePlayerList() {
-                const currentPlayers = Object.values(AppState.connections);
+                const currentPlayers = Object.entries(AppState.connections);
                 document.getElementById('host-player-count').innerText = `${currentPlayers.length}/10`;
                 const list = document.getElementById('host-player-list');
                 
                 if(currentPlayers.length === 0) {
                     list.innerHTML = '<div class="text-gray-500 italic text-center mt-10">Warte auf Spieler...</div>';
                 } else {
-                    list.innerHTML = currentPlayers.map(p => `
-                        <div class="bg-gray-800 p-3 rounded-lg flex justify-between border-l-4" style="border-color: ${p.color}">
+                    list.innerHTML = currentPlayers.map(([id, p]) => `
+                        <div class="bg-gray-800 p-3 rounded-lg flex justify-between items-center border-l-4" style="border-color: ${p.color}">
                             <span class="font-bold" style="color: ${p.color}">${p.name}</span>
+                            <button onclick="Host.kickPlayer('${id}')" class="px-2.5 py-1 bg-red-600/80 hover:bg-red-600 text-white rounded-lg text-xs font-bold transition flex items-center gap-1">
+                                <i class="fa-solid fa-user-xmark"></i> Kicken
+                            </button>
                         </div>
                     `).join('');
                 }
@@ -733,10 +785,22 @@
 
             renderLiveScores() {
                 const container = document.getElementById('host-live-scores');
-                container.innerHTML = Object.values(AppState.connections).sort((a,b)=>b.score-a.score).map(p => `
-                    <div class="bg-gray-800 px-3 py-2 rounded-lg flex justify-between items-center border border-gray-700">
-                        <span class="font-bold" style="color: ${p.color}">${p.name}</span>
-                        <span class="text-green-400 font-mono font-bold">${p.score} Pkt</span>
+                const entries = Object.entries(AppState.connections).sort((a,b) => b[1].score - a[1].score);
+
+                if (entries.length === 0) {
+                    container.innerHTML = '<div class="text-xs text-gray-500 italic">Keine Spieler verbunden</div>';
+                    return;
+                }
+
+                container.innerHTML = entries.map(([id, p]) => `
+                    <div class="bg-gray-800 px-3 py-2 rounded-lg flex justify-between items-center border border-gray-700 gap-2">
+                        <span class="font-bold truncate max-w-[90px]" style="color: ${p.color}">${p.name}</span>
+                        <div class="flex items-center gap-1.5">
+                            <button onclick="Host.adjustScore('${id}', -50)" class="px-1.5 py-0.5 bg-red-900/80 hover:bg-red-700 text-red-200 text-xs rounded font-mono font-bold">-50</button>
+                            <span onclick="Host.setScore('${id}')" title="Klicken zum Bearbeiten" class="text-green-400 font-mono font-bold cursor-pointer hover:underline px-1">${p.score} Pkt</span>
+                            <button onclick="Host.adjustScore('${id}', 50)" class="px-1.5 py-0.5 bg-green-900/80 hover:bg-green-700 text-green-200 text-xs rounded font-mono font-bold">+50</button>
+                            <button onclick="Host.kickPlayer('${id}')" title="Spieler kicken" class="ml-1 px-1.5 py-0.5 bg-red-600/80 hover:bg-red-600 text-white rounded text-xs transition"><i class="fa-solid fa-user-xmark"></i></button>
+                        </div>
                     </div>
                 `).join('');
             },
@@ -811,7 +875,7 @@
                     UI.showToast(`<i class="fa-solid fa-xmark"></i> Falsch! (-50 Pkt für ${player.name})`, 'error');
                 }
 
-                Host.broadcast({ type: 'score_update', scores: Object.fromEntries(Object.entries(AppState.connections).map(([k,v]) => [k, v.score])) });
+                Host.broadcastScoreUpdate();
                 
                 const unplacedLeft = tl.items.filter(i => i.placed === null).length;
                 if (unplacedLeft === 0) {
@@ -831,7 +895,11 @@
 
             nextPlayer() {
                 const pIds = Object.keys(AppState.connections);
-                if(pIds.length === 0) return;
+                if(pIds.length === 0) {
+                    AppState.currentPlayerId = null;
+                    Host.renderBoard();
+                    return;
+                }
                 const currentIdx = pIds.indexOf(AppState.currentPlayerId);
                 AppState.currentPlayerId = pIds[(currentIdx + 1) % pIds.length];
                 
@@ -874,7 +942,10 @@
                     });
 
                     conn.on('data', data => Player.handleHostData(data));
-                    conn.on('close', () => { alert('Verbindung verloren.'); location.reload(); });
+                    conn.on('close', () => { 
+                        alert('Verbindung verloren.'); 
+                        location.reload(); 
+                    });
                 });
             },
 
@@ -884,6 +955,10 @@
                     UI.show('screen-player-board');
                     document.getElementById('display-player-name').innerText = AppState.myName;
                     document.getElementById('display-player-name').style.color = data.color;
+                }
+                else if(data.type === 'kicked') {
+                    alert('Du wurdest vom Moderator aus der Spielrunde gekickt.');
+                    location.reload();
                 }
                 else if(data.type === 'state_update') {
                     UI.show('screen-player-board');
@@ -905,6 +980,11 @@
                             banner.style.color = data.currentPlayer.color;
                             banner.classList.remove('animate-pulse');
                         }
+                    } else {
+                        banner.innerHTML = `Warte auf Spieler...`;
+                        banner.style.backgroundColor = '#1F2937';
+                        banner.style.color = '#ffffff';
+                        banner.classList.remove('animate-pulse');
                     }
                 }
                 else if(data.type === 'score_update') {
