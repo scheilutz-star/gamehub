@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GameHub — Spiele</title>
-<link rel="icon" type="image/png" sizes="40x40" href="favicon.png">
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
@@ -14,6 +13,7 @@
     --panel: #12173F;
     --gold: #F2B705;
     --teal: #2DD4BF;
+    --pink: #FF3D81;
     --ink: #F4F2EB;
     --muted: #9498C9;
   }
@@ -66,6 +66,10 @@
     box-shadow: 0 25px 60px -15px rgba(45,212,191,0.45), 0 0 0 1px rgba(45,212,191,0.5) inset;
     border-color: rgba(45,212,191,0.7) !important;
   }
+  .glow-pink:hover, .glow-pink:focus-within{
+    box-shadow: 0 25px 60px -15px rgba(255,61,129,0.45), 0 0 0 1px rgba(255,61,129,0.5) inset;
+    border-color: rgba(255,61,129,0.7) !important;
+  }
 
   .tile{
     transition: background-color .35s ease, opacity .35s ease, transform .35s ease;
@@ -96,6 +100,32 @@
   .dot:nth-child(3){ transition-delay: .16s; }
   .dot:nth-child(4){ transition-delay: .24s; }
   .dot:nth-child(5){ transition-delay: .32s; }
+
+  .buzzer{
+    transition: transform .4s cubic-bezier(.2,.8,.2,1), opacity .4s ease;
+    opacity: .55;
+  }
+  .group:hover .buzzer, .group:focus-within .buzzer{
+    animation: bounce 1.1s ease-in-out infinite;
+    opacity: 1;
+  }
+  .buzzer:nth-child(1){ animation-delay: 0s !important; }
+  .buzzer:nth-child(2){ animation-delay: .12s !important; }
+  .buzzer:nth-child(3){ animation-delay: .24s !important; }
+  .buzzer:nth-child(4){ animation-delay: .36s !important; }
+  @keyframes bounce{
+    0%,100%{ transform: translateY(0); }
+    50%{ transform: translateY(-8px); }
+  }
+
+  .play-btn-pink{
+    transition: all .3s ease;
+  }
+  .play-btn-pink:hover{
+    background-color: var(--pink);
+    color: #2b0011;
+    box-shadow: 0 10px 30px -8px rgba(255,61,129,0.6);
+  }
 
   .play-btn-gold{
     transition: all .3s ease;
@@ -130,25 +160,25 @@
       <div class="w-9 h-9 rounded-md bg-[var(--gold)] flex items-center justify-center font-display text-[#1a1200] text-sm">GH</div>
       <span class="font-mono uppercase tracking-[0.25em] text-xs text-[var(--muted)]">GameHub</span>
     </div>
-    <span class="font-mono text-xs text-[var(--muted)] hidden sm:block">2 SPIELE VERFÜGBAR</span>
+    <span class="font-mono text-xs text-[var(--muted)] hidden sm:block">3 SPIELE VERFÜGBAR</span>
   </header>
 
   <!-- Hero -->
   <section class="max-w-6xl mx-auto px-6 pt-16 pb-14 md:pt-20 md:pb-20">
     <p class="font-mono uppercase tracking-[0.3em] text-xs text-[var(--gold)] mb-4">Willkommen im Studio</p>
     <h1 class="font-display text-4xl sm:text-6xl md:text-7xl leading-[1.02] max-w-3xl">
-      ZWEI SPIELE.<br>
+      DREI SPIELE.<br>
       <span class="text-[var(--muted)]">DEIN WISSEN.</span><br>
       <span class="text-[var(--gold)]">DEIN GEFÜHL FÜR ZEIT.</span>
     </h1>
     <p class="mt-6 text-base sm:text-lg text-[var(--muted)] max-w-xl">
-      Tritt bei einer Quizshow im Jeopardy-Format an oder bringe historische Gegenstände in die richtige Reihenfolge auf dem Zeitstrahl.
+      Tritt bei einer Quizshow im Jeopardy-Format an, bringe historische Gegenstände in die richtige Reihenfolge auf dem Zeitstrahl oder liefere dir ein schnelles Buzzer-Duell.
     </p>
   </section>
 
   <!-- Spiele-Karten -->
   <main class="max-w-6xl mx-auto px-6 pb-24">
-    <div class="grid md:grid-cols-2 gap-8">
+    <div class="grid md:grid-cols-3 gap-8">
 
       <!-- Karte 1: Quizspiel (Jeopardy) -->
       <a href="/gamehub/lustiges-quizspiel"
@@ -207,6 +237,36 @@
           </div>
 
           <span class="play-btn-teal inline-flex items-center gap-2 rounded-full border border-[var(--teal)] text-[var(--teal)] font-semibold px-6 py-3">
+            Jetzt spielen
+            <span class="arrow">→</span>
+          </span>
+        </div>
+      </a>
+
+      <!-- Karte 3: Cahoot -->
+      <a href="/gamehub/cahoot"
+         class="group card-lift glow-pink relative overflow-hidden rounded-2xl border border-white/10 bg-[var(--panel)] p-8 flex flex-col justify-between min-h-[420px]">
+
+        <div class="board-grid absolute inset-0 pointer-events-none opacity-60"></div>
+
+        <div class="relative">
+          <span class="font-mono uppercase tracking-[0.25em] text-xs text-[var(--pink)]">Modus · Buzzer-Duell</span>
+          <h2 class="font-display text-3xl sm:text-4xl mt-4 leading-tight">Cahoot</h2>
+          <p class="mt-4 text-[var(--muted)] max-w-sm">
+            Schnelle Multiple-Choice-Runden gegen die Uhr: Je schneller und richtiger du antwortest, desto mehr Punkte sichert dir dein Buzzer.
+          </p>
+        </div>
+
+        <div class="relative">
+          <!-- Buzzer-Formen -->
+          <div class="flex items-center gap-3 mb-8">
+            <span class="buzzer w-8 h-8 rounded-md bg-[var(--pink)]"></span>
+            <span class="buzzer w-8 h-8 rounded-full bg-[var(--teal)]"></span>
+            <span class="buzzer w-8 h-8 bg-[var(--gold)]" style="clip-path: polygon(50% 0%, 0% 100%, 100% 100%);"></span>
+            <span class="buzzer w-8 h-8 bg-[var(--ink)]" style="clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);"></span>
+          </div>
+
+          <span class="play-btn-pink inline-flex items-center gap-2 rounded-full border border-[var(--pink)] text-[var(--pink)] font-semibold px-6 py-3">
             Jetzt spielen
             <span class="arrow">→</span>
           </span>
