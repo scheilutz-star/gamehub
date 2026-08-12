@@ -6,8 +6,8 @@
     <title>P2P Kahoot-Style Quiz</title>
     
     <!-- Bibliotheken laden -->
-    <link rel="icon" type="image/png" sizes="40x40" href="favicon.png">
-  <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="icon" type="image/png" sizes="40x40" href="favicon.png"><link rel="icon" type="image/png" sizes="40x40" href="favicon.png">
+    <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -116,10 +116,22 @@
 
     <!-- QUIZ EDITOR -->
     <div id="screen-editor" class="hidden flex-1 flex flex-col p-6 max-w-4xl mx-auto w-full">
-        <div class="flex justify-between items-center mb-6">
+        <div class="flex justify-between items-center mb-4">
             <h2 class="text-3xl font-bold text-cyanAccent"><i class="fa-solid fa-pen-to-square"></i> Fragen-Editor</h2>
             <button onclick="App.toggleEditor()" class="px-6 py-2 bg-deepPurple hover:bg-purple-600 rounded-lg font-bold">Fertig</button>
         </div>
+        
+        <!-- IMPORT / EXPORT BUTTONS -->
+        <div class="flex gap-3 mb-6">
+            <button onclick="Editor.exportJSON()" class="flex-1 md:flex-none px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded-lg text-sm font-bold transition flex items-center justify-center gap-2">
+                <i class="fa-solid fa-download"></i> Exportieren
+            </button>
+            <button onclick="Editor.triggerImport()" class="flex-1 md:flex-none px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded-lg text-sm font-bold transition flex items-center justify-center gap-2">
+                <i class="fa-solid fa-upload"></i> Importieren
+            </button>
+            <input type="file" id="import-file" accept=".json" class="hidden" onchange="Editor.importJSON(event)">
+        </div>
+
         <div class="glass p-6 rounded-2xl flex-1 overflow-y-auto space-y-6" id="editor-questions">
             <!-- Fragen werden dynamisch gerendert -->
         </div>
@@ -383,6 +395,43 @@
                 data.splice(idx, 1);
                 Storage.save(data);
                 this.render();
+            },
+            
+            // NEU: Import / Export Funktionen
+            triggerImport() {
+                document.getElementById('import-file').click();
+            },
+            importJSON(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const importedData = JSON.parse(e.target.result);
+                        if (Array.isArray(importedData)) {
+                            Storage.save(importedData);
+                            Editor.render();
+                            alert("Fragen erfolgreich importiert!");
+                        } else {
+                            alert("Ungültiges Dateiformat. Bitte wähle eine korrekte Quiz-JSON.");
+                        }
+                    } catch (err) {
+                        alert("Fehler beim Lesen der Datei. Ist es eine gültige JSON-Datei?");
+                    }
+                    event.target.value = ''; // Datei-Input zurücksetzen, damit man dieselbe Datei nochmal laden kann
+                };
+                reader.readAsText(file);
+            },
+            exportJSON() {
+                const data = Storage.load();
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
+                const downloadAnchorNode = document.createElement('a');
+                downloadAnchorNode.setAttribute("href", dataStr);
+                downloadAnchorNode.setAttribute("download", "quiz-fragen.json");
+                document.body.appendChild(downloadAnchorNode); 
+                downloadAnchorNode.click();
+                downloadAnchorNode.remove();
             }
         };
 
