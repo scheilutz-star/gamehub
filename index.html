@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GameHub — Spiele</title>
-<link rel="icon" type="image/png" sizes="40x40" href="favicon.png">
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
@@ -15,6 +14,7 @@
     --gold: #F2B705;
     --teal: #2DD4BF;
     --pink: #FF3D81;
+    --violet: #8B5CF6;
     --ink: #F4F2EB;
     --muted: #9498C9;
   }
@@ -23,8 +23,9 @@
     background-color: var(--bg);
     color: var(--ink);
     font-family: 'Space Grotesk', sans-serif;
+    overflow-x: hidden;
   }
-  .font-display{ font-family: 'Archivo Black', sans-serif; }
+  .font-display{ font-family: 'Archivo Black', sans-serif; line-height: 1.15; }
   .font-mono{ font-family: 'IBM Plex Mono', monospace; }
 
   /* Sternenfeld-Hintergrund */
@@ -70,6 +71,10 @@
   .glow-pink:hover, .glow-pink:focus-within{
     box-shadow: 0 25px 60px -15px rgba(255,61,129,0.45), 0 0 0 1px rgba(255,61,129,0.5) inset;
     border-color: rgba(255,61,129,0.7) !important;
+  }
+  .glow-violet:hover, .glow-violet:focus-within{
+    box-shadow: 0 25px 60px -15px rgba(139,92,246,0.45), 0 0 0 1px rgba(139,92,246,0.5) inset;
+    border-color: rgba(139,92,246,0.7) !important;
   }
 
   .tile{
@@ -119,6 +124,31 @@
     50%{ transform: translateY(-8px); }
   }
 
+  .avatar{
+    transition: transform .4s cubic-bezier(.2,.8,.2,1), box-shadow .4s ease;
+  }
+  .group:hover .avatar, .group:focus-within .avatar{
+    animation: pop 1.4s ease-in-out infinite;
+    box-shadow: 0 0 14px rgba(139,92,246,0.7);
+  }
+  .avatar:nth-child(1){ animation-delay: 0s !important; }
+  .avatar:nth-child(2){ animation-delay: .15s !important; }
+  .avatar:nth-child(3){ animation-delay: .3s !important; }
+  .avatar:nth-child(4){ animation-delay: .45s !important; }
+  @keyframes pop{
+    0%,100%{ transform: scale(1); }
+    50%{ transform: scale(1.18); }
+  }
+
+  .play-btn-violet{
+    transition: all .3s ease;
+  }
+  .play-btn-violet:hover{
+    background-color: var(--violet);
+    color: #14061f;
+    box-shadow: 0 10px 30px -8px rgba(139,92,246,0.6);
+  }
+
   .play-btn-pink{
     transition: all .3s ease;
   }
@@ -161,36 +191,36 @@
       <div class="w-9 h-9 rounded-md bg-[var(--gold)] flex items-center justify-center font-display text-[#1a1200] text-sm">GH</div>
       <span class="font-mono uppercase tracking-[0.25em] text-xs text-[var(--muted)]">GameHub</span>
     </div>
-    <span class="font-mono text-xs text-[var(--muted)] hidden sm:block">3 SPIELE VERFÜGBAR</span>
+    <span class="font-mono text-xs text-[var(--muted)] hidden sm:block">4 SPIELE VERFÜGBAR</span>
   </header>
 
   <!-- Hero -->
   <section class="max-w-6xl mx-auto px-6 pt-16 pb-14 md:pt-20 md:pb-20">
     <p class="font-mono uppercase tracking-[0.3em] text-xs text-[var(--gold)] mb-4">Willkommen im Studio</p>
-    <h1 class="font-display text-4xl sm:text-6xl md:text-7xl leading-[1.02] max-w-3xl">
-      DREI SPIELE.<br>
+    <h1 class="font-display text-3xl sm:text-5xl md:text-6xl lg:text-7xl leading-[1.15] max-w-3xl">
+      VIER SPIELE.<br>
       <span class="text-[var(--muted)]">DEIN WISSEN.</span><br>
       <span class="text-[var(--gold)]">DEIN GEFÜHL FÜR ZEIT.</span>
     </h1>
     <p class="mt-6 text-base sm:text-lg text-[var(--muted)] max-w-xl">
-      Tritt bei einer Quizshow im Jeopardy-Format an, bringe historische Gegenstände in die richtige Reihenfolge auf dem Zeitstrahl oder liefere dir ein schnelles Buzzer-Duell.
+      Tritt bei einer Quizshow im Jeopardy-Format an, bringe historische Gegenstände in die richtige Reihenfolge auf dem Zeitstrahl, liefere dir ein schnelles Buzzer-Duell oder lerne dein Team im Kennenlern-Quiz besser kennen.
     </p>
   </section>
 
   <!-- Spiele-Karten -->
   <main class="max-w-6xl mx-auto px-6 pb-24">
-    <div class="grid md:grid-cols-3 gap-8">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 lg:gap-8">
 
       <!-- Karte 1: Quizspiel (Jeopardy) -->
       <a href="/gamehub/lustiges-quizspiel"
-         class="group card-lift glow-gold relative overflow-hidden rounded-2xl border border-white/10 bg-[var(--panel)] p-8 flex flex-col justify-between min-h-[420px]">
+         class="group card-lift glow-gold relative overflow-hidden rounded-2xl border border-white/10 bg-[var(--panel)] p-6 sm:p-8 flex flex-col justify-between min-h-[340px] sm:min-h-[380px]">
 
         <div class="board-grid absolute inset-0 pointer-events-none"></div>
 
         <div class="relative">
-          <span class="font-mono uppercase tracking-[0.25em] text-xs text-[var(--gold)]">Kategorie · Wissen</span>
-          <h2 class="font-display text-3xl sm:text-4xl mt-4 leading-tight">Lustiges<br>Quizspiel</h2>
-          <p class="mt-4 text-[var(--muted)] max-w-sm">
+          <span class="font-mono uppercase tracking-[0.2em] text-xs text-[var(--gold)]">Kategorie · Wissen</span>
+          <h2 class="font-display text-2xl sm:text-4xl mt-4 break-words">Lustiges<br>Quizspiel</h2>
+          <p class="mt-4 text-[var(--muted)] max-w-md break-words">
             Beantworte Fragen im klassischen Jeopardy-Format, wähle Kategorien und Punktwerte und sammle so viele Punkte wie möglich, bevor die Zeit abläuft.
           </p>
         </div>
@@ -215,14 +245,14 @@
 
       <!-- Karte 2: Zeitstrahl-Spiel -->
       <a href="/gamehub/zeitstrahl-spiel"
-         class="group card-lift glow-teal relative overflow-hidden rounded-2xl border border-white/10 bg-[var(--panel)] p-8 flex flex-col justify-between min-h-[420px]">
+         class="group card-lift glow-teal relative overflow-hidden rounded-2xl border border-white/10 bg-[var(--panel)] p-6 sm:p-8 flex flex-col justify-between min-h-[340px] sm:min-h-[380px]">
 
         <div class="timeline-track absolute inset-x-0 top-1/2 h-16 -translate-y-1/2 pointer-events-none"></div>
 
         <div class="relative">
-          <span class="font-mono uppercase tracking-[0.25em] text-xs text-[var(--teal)]">Modus · Einordnen</span>
-          <h2 class="font-display text-3xl sm:text-4xl mt-4 leading-tight">Zeitstrahl-<br>Spiel</h2>
-          <p class="mt-4 text-[var(--muted)] max-w-sm">
+          <span class="font-mono uppercase tracking-[0.2em] text-xs text-[var(--teal)]">Modus · Einordnen</span>
+          <h2 class="font-display text-2xl sm:text-4xl mt-4 break-words">Zeitstrahl-<br>Spiel</h2>
+          <p class="mt-4 text-[var(--muted)] max-w-md break-words">
             Ordne verschiedene Gegenstände chronologisch richtig auf dem Zeitstrahl ein. Je genauer deine Zuordnung, desto mehr Punkte bekommst du.
           </p>
         </div>
@@ -246,14 +276,14 @@
 
       <!-- Karte 3: Cahoot -->
       <a href="/gamehub/cahoot"
-         class="group card-lift glow-pink relative overflow-hidden rounded-2xl border border-white/10 bg-[var(--panel)] p-8 flex flex-col justify-between min-h-[420px]">
+         class="group card-lift glow-pink relative overflow-hidden rounded-2xl border border-white/10 bg-[var(--panel)] p-6 sm:p-8 flex flex-col justify-between min-h-[340px] sm:min-h-[380px]">
 
         <div class="board-grid absolute inset-0 pointer-events-none opacity-60"></div>
 
         <div class="relative">
-          <span class="font-mono uppercase tracking-[0.25em] text-xs text-[var(--pink)]">Modus · Buzzer-Duell</span>
-          <h2 class="font-display text-3xl sm:text-4xl mt-4 leading-tight">Cahoot</h2>
-          <p class="mt-4 text-[var(--muted)] max-w-sm">
+          <span class="font-mono uppercase tracking-[0.2em] text-xs text-[var(--pink)]">Modus · Buzzer-Duell</span>
+          <h2 class="font-display text-2xl sm:text-4xl mt-4 break-words">Cahoot</h2>
+          <p class="mt-4 text-[var(--muted)] max-w-md break-words">
             Schnelle Multiple-Choice-Runden gegen die Uhr: Je schneller und richtiger du antwortest, desto mehr Punkte sichert dir dein Buzzer.
           </p>
         </div>
@@ -274,11 +304,41 @@
         </div>
       </a>
 
+      <!-- Karte 4: Kennenlern-Quiz -->
+      <a href="/gamehub/kennlern-quiz"
+         class="group card-lift glow-violet relative overflow-hidden rounded-2xl border border-white/10 bg-[var(--panel)] p-6 sm:p-8 flex flex-col justify-between min-h-[340px] sm:min-h-[380px]">
+
+        <div class="board-grid absolute inset-0 pointer-events-none opacity-50"></div>
+
+        <div class="relative">
+          <span class="font-mono uppercase tracking-[0.2em] text-xs text-[var(--violet)]">Modus · Team & Spaß</span>
+          <h2 class="font-display text-2xl sm:text-4xl mt-4 break-words">Kennenlern-<br>Quiz</h2>
+          <p class="mt-4 text-[var(--muted)] max-w-md break-words">
+            Beantworte Fragen über dich und dein Team, errate wer hinter welcher Antwort steckt und lerne dabei alle noch besser kennen.
+          </p>
+        </div>
+
+        <div class="relative">
+          <!-- Avatar-Bubbles -->
+          <div class="flex items-center -space-x-2 mb-8">
+            <span class="avatar w-9 h-9 rounded-full bg-[var(--violet)]/30 border-2 border-[var(--violet)]"></span>
+            <span class="avatar w-9 h-9 rounded-full bg-[var(--pink)]/30 border-2 border-[var(--pink)]"></span>
+            <span class="avatar w-9 h-9 rounded-full bg-[var(--teal)]/30 border-2 border-[var(--teal)]"></span>
+            <span class="avatar w-9 h-9 rounded-full bg-[var(--gold)]/30 border-2 border-[var(--gold)]"></span>
+          </div>
+
+          <span class="play-btn-violet inline-flex items-center gap-2 rounded-full border border-[var(--violet)] text-[var(--violet)] font-semibold px-6 py-3">
+            Jetzt spielen
+            <span class="arrow">→</span>
+          </span>
+        </div>
+      </a>
+
     </div>
   </main>
 
   <footer class="max-w-6xl mx-auto px-6 pb-10">
-    <p class="font-mono text-xs text-[var(--muted)]">GameHub — zwei Spiele, ein Startpunkt.</p>
+    <p class="font-mono text-xs text-[var(--muted)]">GameHub — vier Spiele, ein Startpunkt.</p>
   </footer>
 
 </body>
