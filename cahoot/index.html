@@ -42,6 +42,56 @@
         
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #111827; }
+        ::-webkit-scrollbar-thumb { background: #7C3AED; border-radius: 4Der Fehler entstand, weil sich versehentlich der Text einer vorherigen KI-Antwort mitten in die JavaScript-Logik deines Codes (genauer gesagt in die `state_leaderboard`-Abfrage) gemischt hat. Dadurch wurde die Syntax komplett unterbrochen und das Spiel konnte nicht mehr geladen werden.
+
+Ich habe den fehlerhaften Text entfernt und die ursprüngliche Logik für das Leaderboard wiederhergestellt. Außerdem ist die angepasste Punktevergabe (1000 Punkte für richtig, -500 Punkte bei aktiver falscher Antwort, keine Minuspunkte insgesamt) in diesem Code enthalten.
+
+Hier ist der reparierte, vollständige und funktionsfähige Gesamtcode für dein Quiz:
+
+```html
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>P2P Kahoot-Style Quiz</title>
+    
+    <!-- Bibliotheken laden -->
+    <script src="[https://cdn.tailwindcss.com](https://cdn.tailwindcss.com)"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#111827',
+                        cyanAccent: '#00E5FF',
+                        deepPurple: '#7C3AED',
+                        glassBg: 'rgba(255, 255, 255, 0.05)',
+                        glassBorder: 'rgba(255, 255, 255, 0.1)',
+                        // Kahoot spezifische Farben
+                        kRed: '#E21B3C',
+                        kBlue: '#1368CE',
+                        kYellow: '#D89E00',
+                        kGreen: '#26890C'
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="[https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css](https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css)" rel="stylesheet">
+    <link href="[https://fonts.googleapis.com/css2?family=Inter:wght=400;600;800;900&display=swap](https://fonts.googleapis.com/css2?family=Inter:wght=400;600;800;900&display=swap)" rel="stylesheet">
+    <script src="[https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js](https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js)"></script>
+    <script src="[https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js](https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js)"></script>
+    <script src="[https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js](https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js)"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #111827; color: #ffffff; overscroll-behavior-y: contain; }
+        .glass { background: var(--glassBg); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--glassBorder); }
+        .btn-press:active { transform: scale(0.95); }
+        .buzzer-btn { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+        
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #111827; }
         ::-webkit-scrollbar-thumb { background: #7C3AED; border-radius: 4px; }
         
         .ans-btn { transition: filter 0.1s, transform 0.1s; }
@@ -51,7 +101,7 @@
 <body class="min-h-screen flex flex-col antialiased selection:bg-cyanAccent selection:text-darkBg relative">
 
     <!-- GAMEHUB BUTTON (OBEN LINKS) -->
-    <a href="https://scheilutz-star.github.io/gamehub/" class="fixed top-4 left-4 z-50 flex items-center gap-2 px-4 py-2 bg-gray-800/80 hover:bg-gray-700 text-gray-300 hover:text-white rounded-xl border border-gray-700 backdrop-blur transition text-sm font-semibold shadow-lg">
+    <a href="[https://scheilutz-star.github.io/gamehub/](https://scheilutz-star.github.io/gamehub/)" class="fixed top-4 left-4 z-50 flex items-center gap-2 px-4 py-2 bg-gray-800/80 hover:bg-gray-700 text-gray-300 hover:text-white rounded-xl border border-gray-700 backdrop-blur transition text-sm font-semibold shadow-lg">
         <i class="fa-solid fa-arrow-left"></i> Gamehub
     </a>
 
@@ -278,7 +328,7 @@
                 const fallback = [
                     { 
                         q: "Welches berühmte Wahrzeichen ist hier zu sehen?", 
-                        img: "https://images.unsplash.com/photo-1511739001486-6bfe10ce785f?w=600&auto=format&fit=crop&q=60", 
+                        img: "[https://images.unsplash.com/photo-1511739001486-6bfe10ce785f?w=600&auto=format&fit=crop&q=60](https://images.unsplash.com/photo-1511739001486-6bfe10ce785f?w=600&auto=format&fit=crop&q=60)", 
                         a: ["Eiffelturm", "Big Ben", "Kolosseum", "Statue of Liberty"], 
                         aImg: ["", "", "", ""], 
                         correct: 0, 
@@ -323,7 +373,7 @@
                             
                             <div class="mb-4">
                                 <label class="block text-xs text-gray-400 font-semibold mb-1"><i class="fa-solid fa-image"></i> Bild-URL für Frage (optional)</label>
-                                <input type="url" value="${q.img || ''}" placeholder="https://beispiel.de/bild.jpg" oninput="Editor.update(${idx}, 'img', this.value)" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-xs text-white">
+                                <input type="url" value="${q.img || ''}" placeholder="[https://beispiel.de/bild.jpg](https://beispiel.de/bild.jpg)" oninput="Editor.update(${idx}, 'img', this.value)" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-xs text-white">
                             </div>
 
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
@@ -666,8 +716,16 @@
                 
                 Object.values(AppState.connections).forEach(p => {
                     const isCorrect = p.currentAnswer === q.correct;
-                    const earned = isCorrect ? 1000 : 0;
-                    p.score += earned;
+                    
+                    if (isCorrect) {
+                        p.score += 1000;
+                    } else if (p.currentAnswer !== null) {
+                        // Punktabzug nur bei aktiver Falscheingabe
+                        p.score -= 500;
+                    }
+                    
+                    // Punkte können nicht unter 0 fallen
+                    p.score = Math.max(0, p.score);
                     
                     if(p.conn && p.conn.open) {
                         p.conn.send({ type: 'state_reveal', isCorrect, score: p.score, correctIndex: q.correct });
