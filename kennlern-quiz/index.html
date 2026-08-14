@@ -1,1 +1,1328 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>P2P Kennenlern-Duell</title>
+    <link rel="icon" type="image/png" sizes="40x40" href="favicon.png">
+  <link rel="icon" type="image/png" sizes="40x40" href="favicon.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#111827',
+                        cyanAccent: '#10B981',
+                        deepPurple: '#3B82F6',
+                        glassBg: 'rgba(255, 255, 255, 0.05)',
+                        glassBorder: 'rgba(255, 255, 255, 0.1)'
+                    }
+                }
+            }
+        }
+    </script>
 
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght=400;600;800;900&display=swap" rel="stylesheet">
+
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #111827; color: #ffffff; overscroll-behavior-y: contain; }
+        .glass { background: var(--glassBg); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--glassBorder); }
+        .btn-press:active { transform: scale(0.95); }
+        .buzzer-btn { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+        
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #111827; }
+        ::-webkit-scrollbar-thumb { background: #3B82F6; border-radius: 4px; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-cyanAccent selection:text-darkBg relative">
+
+    <a href="https://scheilutz-star.github.io/gamehub/" class="absolute top-4 left-4 z-50 text-gray-400 hover:text-cyanAccent transition flex items-center gap-2 font-semibold">
+        <i class="fa-solid fa-gamepad"></i> Gamehub
+    </a>
+
+    <div id="copy-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm transition-opacity">
+        <div class="bg-gray-800 p-6 rounded-2xl max-w-sm w-full border border-gray-700 shadow-2xl relative transform transition-transform">
+            <button onclick="document.getElementById('copy-modal').classList.add('hidden')" class="absolute top-4 right-4 text-gray-400 hover:text-white transition">
+                <i class="fa-solid fa-xmark text-xl"></i>
+            </button>
+            <h3 class="text-xl font-bold mb-4 text-cyanAccent"><i class="fa-solid fa-share-nodes mr-2"></i>Lobby teilen</h3>
+            <div class="space-y-3">
+                <button onclick="Host.copyToClipboard('code')" class="w-full py-4 bg-gray-900 hover:bg-gray-700 border border-gray-700 hover:border-cyanAccent rounded-xl flex items-center justify-between px-4 transition btn-press">
+                    <span class="font-bold text-gray-200">Nur Code kopieren</span> <i class="fa-solid fa-hashtag text-cyanAccent text-lg"></i>
+                </button>
+                <button onclick="Host.copyToClipboard('link')" class="w-full py-4 bg-gray-900 hover:bg-gray-700 border border-gray-700 hover:border-cyanAccent rounded-xl flex items-center justify-between px-4 transition btn-press">
+                    <span class="font-bold text-gray-200">Einladungslink kopieren</span> <i class="fa-solid fa-link text-cyanAccent text-lg"></i>
+                </button>
+            </div>
+            <p id="copy-feedback" class="text-green-400 text-sm mt-4 text-center hidden font-bold animate-pulse"><i class="fa-solid fa-check mr-1"></i> Erfolgreich kopiert!</p>
+        </div>
+    </div>
+
+    <div id="screen-role" class="flex-1 flex items-center justify-center p-6">
+        <div class="glass p-8 rounded-2xl w-full max-w-md text-center shadow-2xl mt-8">
+            <h1 class="text-4xl font-extrabold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-cyanAccent to-deepPurple">Kennenlern-Duell</h1>
+            <p class="text-gray-400 mb-8">Wähle deine Rolle für das Spiel</p>
+            
+            <button onclick="App.initHost()" class="w-full mb-4 py-4 rounded-xl bg-deepPurple hover:bg-blue-600 text-white font-bold text-lg transition-colors btn-press flex items-center justify-center gap-3 shadow-lg shadow-blue-900/50">
+                <i class="fa-solid fa-users"></i> Spielleiter (Host) erstellen
+            </button>
+            <div class="relative flex py-2 items-center">
+                <div class="flex-grow border-t border-gray-600"></div>
+                <span class="flex-shrink-0 mx-4 text-gray-500 text-sm">oder</span>
+                <div class="flex-grow border-t border-gray-600"></div>
+            </div>
+            <button onclick="App.showPlayerJoin()" class="w-full mt-4 py-4 rounded-xl bg-gray-800 hover:bg-gray-700 border border-gray-600 text-white font-bold text-lg transition-colors btn-press flex items-center justify-center gap-3">
+                <i class="fa-solid fa-hand-pointer"></i> Als Mitspieler beitreten
+            </button>
+        </div>
+    </div>
+
+    <div id="screen-host-lobby" class="hidden flex-1 flex flex-col items-center justify-center p-6">
+        <div class="w-full max-w-5xl grid grid-cols-1 md:grid-cols-2 gap-8 mt-8">
+            <div class="glass p-8 rounded-2xl flex flex-col items-center text-center">
+                <h2 class="text-2xl font-bold mb-2">Lobby-Code</h2>
+                
+                <div onclick="Host.showCopyMenu()" title="Klicken zum Teilen" class="flex items-center justify-center gap-4 bg-gray-900 hover:bg-gray-800 border border-gray-700 hover:border-cyanAccent py-3 px-6 rounded-xl mb-6 cursor-pointer transition-all group shadow-lg">
+                    <div class="text-5xl font-extrabold tracking-widest text-cyanAccent" id="host-lobby-id">---</div>
+                    <i class="fa-regular fa-copy text-2xl text-gray-500 group-hover:text-cyanAccent transition"></i>
+                </div>
+                
+                <div class="bg-white p-2 rounded-lg mb-4">
+                    <canvas id="qr-code"></canvas>
+                </div>
+                <p class="text-sm text-gray-400">Spieler können diesen Code eingeben oder den QR-Code scannen.</p>
+                <div class="w-full flex gap-2 mt-6">
+                    <button onclick="App.toggleEditor()" class="flex-1 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold transition"><i class="fa-solid fa-pen-to-square"></i> Fakten Editor</button>
+                    <button onclick="App.startHostGame()" class="flex-1 py-3 bg-green-500 hover:bg-green-600 text-white rounded-lg font-bold transition shadow-lg shadow-green-900/50"><i class="fa-solid fa-play"></i> Starten</button>
+                </div>
+            </div>
+            <div class="glass p-8 rounded-2xl flex flex-col">
+                <h2 class="text-2xl font-bold mb-4 flex justify-between">
+                    <span>Mitspieler</span> <span class="text-cyanAccent" id="host-player-count">0/30</span>
+                </h2>
+                <div id="host-player-list" class="flex-1 overflow-y-auto space-y-3 max-h-[400px]">
+                    <div class="text-gray-500 italic text-center mt-10">Warte auf Spieler...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="screen-editor" class="hidden flex-1 flex flex-col p-6 mt-8 max-w-6xl mx-auto w-full">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-3xl font-bold text-cyanAccent"><i class="fa-solid fa-pen-to-square"></i> Fakten-Editor</h2>
+            <div class="space-x-3">
+                <button onclick="Editor.exportJSON()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg"><i class="fa-solid fa-download"></i> Export</button>
+                <button onclick="document.getElementById('import-file').click()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg"><i class="fa-solid fa-upload"></i> Import</button>
+                <input type="file" id="import-file" class="hidden" accept=".json" onchange="Editor.importJSON(event)">
+                <button onclick="App.toggleEditor()" class="px-4 py-2 bg-deepPurple hover:bg-blue-600 rounded-lg font-bold">Fertig</button>
+            </div>
+        </div>
+        
+        <div class="flex space-x-2 mb-4">
+            <button id="tab-board-0" onclick="Editor.switchBoard(0)" class="flex-1 py-3 rounded-lg bg-deepPurple text-white font-bold transition">Fakten Pool 1</button>
+            <button id="tab-board-1" onclick="Editor.switchBoard(1)" class="flex-1 py-3 rounded-lg bg-gray-700 text-gray-300 font-bold transition">Fakten Pool 2</button>
+        </div>
+
+        <div class="glass p-6 rounded-2xl flex-1 overflow-y-auto">
+            <div id="editor-categories" class="space-y-8"></div>
+            <button onclick="Editor.addCategory()" class="mt-6 w-full py-4 border-2 border-dashed border-gray-600 text-gray-400 hover:border-cyanAccent hover:text-cyanAccent rounded-xl transition font-bold">
+                + Neue Kategorie hinzufügen
+            </button>
+        </div>
+    </div>
+
+    <div id="screen-host-buzzer" class="hidden flex-1 flex flex-col items-center justify-center p-6">
+        <div class="glass p-8 md:p-10 rounded-3xl w-full max-w-2xl text-center relative overflow-hidden flex flex-col">
+            
+            <div class="w-full flex justify-between items-start mb-6 border-b border-gray-800 pb-4">
+                <div class="min-w-[140px] text-left">
+                    <button onclick="Host.startTimer()" id="host-global-timer-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-white font-bold transition shadow-[0_0_15px_rgba(37,99,235,0.5)] btn-press flex items-center gap-2 text-sm">
+                        <i class="fa-solid fa-stopwatch"></i> 30s Timer
+                    </button>
+                    <div id="host-timer-display" class="hidden text-4xl font-mono font-black text-cyanAccent drop-shadow-[0_0_10px_rgba(16,185,129,0.5)]">30</div>
+                </div>
+                
+                <div class="flex gap-2">
+                    <button onclick="Host.openScoreEditor()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-white transition"><i class="fa-solid fa-sliders"></i> Punkte</button>
+                    <button onclick="App.endGame()" class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-white transition"><i class="fa-solid fa-flag-checkered"></i> Beenden</button>
+                </div>
+            </div>
+            
+            <div class="text-sm text-cyanAccent font-bold mb-2 uppercase tracking-widest" id="active-q-category">Kategorie - 100</div>
+            
+            <div id="host-active-q-image-container" class="hidden mb-4 w-full">
+                <img id="host-active-q-image" src="" alt="Fragenbild" class="max-h-48 md:max-h-64 mx-auto rounded-xl shadow-md object-contain">
+            </div>
+
+            <div id="host-active-q-audio-container" class="hidden mb-4 w-full flex justify-center">
+                <audio id="host-active-q-audio" controls class="w-full max-w-md"></audio>
+            </div>
+
+            <h2 class="text-3xl font-bold mb-4" id="active-q-text">Fakt hier...</h2>
+            <p class="text-gray-400 mb-6 italic">Gesuchte Person: <span id="active-q-answer" class="text-white font-semibold text-xl"></span></p>
+            
+            <div id="buzzer-status-area" class="min-h-[140px] flex flex-col items-center justify-center transition-all">
+                <div class="text-6xl animate-pulse mb-4"><i class="fa-solid fa-hand-pointer text-gray-500"></i></div>
+                <p class="text-xl text-gray-400">Warte auf Buzzer...</p>
+            </div>
+
+            <div id="buzzer-action-area" class="hidden w-full mt-6 flex flex-col gap-4">
+                <div class="w-full flex gap-4">
+                    <button onclick="Host.judgeAnswer(true)" class="flex-1 py-4 bg-green-500 hover:bg-green-600 rounded-xl text-white font-bold text-xl btn-press"><i class="fa-solid fa-check"></i> Richtig geraten!</button>
+                    <button onclick="Host.judgeAnswer(false)" class="flex-1 py-4 bg-red-500 hover:bg-red-600 rounded-xl text-white font-bold text-xl btn-press"><i class="fa-solid fa-xmark"></i> Falsch</button>
+                </div>
+                <button onclick="Host.unlockBuzzers()" class="w-full py-3 border border-gray-600 hover:bg-gray-800 rounded-xl text-gray-300 font-semibold btn-press"><i class="fa-solid fa-unlock"></i> Buzzer wieder freigeben</button>
+            </div>
+
+            <div class="w-full mt-6 pt-4 border-t border-gray-800">
+                <button onclick="Host.skipQuestion()" class="w-full py-3 bg-amber-600 hover:bg-amber-700 rounded-xl text-white font-bold text-sm transition btn-press">
+                    <i class="fa-solid fa-forward"></i> Sofort Auflösen
+                </button>
+            </div>
+
+            <div id="host-live-scores" class="w-full mt-6 flex gap-4 overflow-x-auto pb-2 border-t border-gray-800 pt-4"></div>
+        </div>
+    </div>
+
+    <div id="screen-player-join" class="hidden flex-1 flex items-center justify-center p-6">
+        <div class="glass p-8 rounded-2xl w-full max-w-md mt-8">
+            <button onclick="App.showRoleSelect()" class="text-gray-400 hover:text-white mb-6"><i class="fa-solid fa-arrow-left"></i> Zurück</button>
+            <h2 class="text-3xl font-bold mb-6 text-cyanAccent">Spiel Beitreten</h2>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Dein echter Name</label>
+                    <input type="text" id="player-name-input" maxlength="20" placeholder="z.B. Max Mustermann" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-cyanAccent">
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Lobby-Code</label>
+                    <input type="text" id="player-lobby-input" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-cyanAccent uppercase font-mono tracking-widest">
+                </div>
+                <button onclick="Player.join()" id="btn-join" class="w-full mt-4 py-4 rounded-xl bg-cyanAccent hover:bg-emerald-400 text-darkBg font-bold text-lg transition-colors btn-press shadow-lg shadow-emerald-900/50">
+                    Verbinden
+                </button>
+            </div>
+            <p id="join-error" class="text-red-400 text-sm mt-4 hidden text-center"></p>
+        </div>
+    </div>
+
+    <div id="screen-player-waiting" class="hidden flex-1 flex flex-col p-4 w-full h-screen justify-center items-center relative">
+        <div class="absolute top-4 left-4 right-4 flex justify-between items-center bg-gray-800 p-3 rounded-xl border border-gray-700 mt-6">
+            <div class="font-bold"><i class="fa-solid fa-user"></i> <span id="display-player-name"></span></div>
+            <div class="text-xs text-gray-500 font-mono"><i class="fa-solid fa-wifi"></i> <span id="player-ping">--</span>ms</div>
+            <div class="font-bold text-green-400"><span id="player-score-wait">0</span> Pkt</div>
+        </div>
+        
+        <div class="text-center animate-pulse mt-12">
+            <i class="fa-solid fa-circle-notch fa-spin text-4xl text-cyanAccent mb-4"></i>
+            <p class="text-xl text-gray-300 font-semibold tracking-wide">
+                Gleich geht's los...
+            </p>
+        </div>
+        
+        <div class="absolute bottom-4 left-4 right-4 mt-8">
+            <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-2 text-center">Mitspieler</div>
+            <div id="player-opponent-list" class="flex gap-2 overflow-x-auto pb-2 px-1 scroll-smooth justify-center"></div>
+        </div>
+    </div>
+
+    <div id="screen-player-buzzer" class="hidden flex-1 flex flex-col relative w-full h-screen bg-gray-900 overflow-hidden">
+        
+        <div id="player-timer-container" class="hidden absolute top-0 left-0 w-full h-2 bg-gray-800 z-50">
+            <div id="player-timer-bar" class="h-full bg-cyanAccent transition-all duration-1000 ease-linear" style="width: 100%"></div>
+        </div>
+        <div id="player-timer-text" class="hidden absolute top-12 right-4 z-50 bg-gray-900/90 border-2 border-cyanAccent text-cyanAccent text-2xl md:text-3xl font-mono font-black px-3 py-1 rounded-lg shadow-[0_0_15px_rgba(16,185,129,0.3)] backdrop-blur-sm transition-colors">30</div>
+
+        <div class="p-4 flex justify-between items-center bg-gray-800 shadow-md relative z-30 mt-8">
+            <div class="font-bold"><i class="fa-solid fa-user"></i> <span id="buzzer-name"></span></div>
+            <div class="font-bold text-xl"><span id="player-score-buzz" class="text-green-400">0</span> Pkt</div>
+        </div>
+
+        <div class="p-6 text-center bg-gray-800 border-b-2 border-cyanAccent shadow-2xl relative z-30 flex flex-col items-center">
+            <div class="text-sm text-cyanAccent font-bold uppercase tracking-widest mb-3" id="player-active-q-category">Kategorie - 100</div>
+            
+            <div id="player-active-q-image-container" class="hidden mb-4 w-full">
+                <img id="player-active-q-image" src="" alt="Faktenbild" class="max-h-48 md:max-h-64 mx-auto rounded-xl shadow-md object-contain">
+            </div>
+
+            <div id="player-active-q-audio-container" class="hidden mb-4 w-full flex justify-center">
+                <audio id="player-active-q-audio" controls class="w-full max-w-md shadow-lg rounded-full"></audio>
+            </div>
+
+            <div class="text-2xl md:text-3xl font-extrabold text-white max-w-3xl mx-auto leading-tight break-words drop-shadow-md" id="player-active-q-text">Lade Fakt...</div>
+        </div>
+
+        <div class="flex-1 flex items-center justify-center p-6 relative z-10">
+            <button id="giant-buzzer" class="buzzer-btn w-64 h-64 md:w-80 md:h-80 rounded-full bg-red-600 shadow-[0_20px_0_#991b1b,0_0_50px_rgba(220,38,38,0.6)] active:shadow-[0_5px_0_#991b1b,0_0_20px_rgba(220,38,38,0.6)] active:translate-y-[15px] transition-all flex items-center justify-center border-8 border-red-400">
+                <span class="text-white font-extrabold text-4xl md:text-5xl tracking-wider pointer-events-none drop-shadow-md text-center">ICH<br>WEIß ES!</span>
+            </button>
+        </div>
+
+        <div id="buzzer-overlay" class="hidden absolute inset-0 z-20 flex flex-col items-center justify-end pb-12 transition-all duration-300">
+            <div id="overlay-content-box" class="bg-gray-900/90 w-11/12 max-w-md p-6 rounded-3xl border border-gray-700 shadow-[0_10px_40px_rgba(0,0,0,0.8)] backdrop-blur-md mb-8 text-center transition-colors">
+                <i id="overlay-icon" class="fa-solid fa-lock text-6xl mb-3 drop-shadow-lg"></i>
+                <h2 id="overlay-title" class="text-3xl md:text-4xl font-black mb-2 tracking-wide uppercase drop-shadow-lg transition-all">Gesperrt</h2>
+                <p id="overlay-desc" class="text-lg font-bold drop-shadow-md text-gray-300">Ein anderer Spieler war schneller.</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="screen-podium" class="hidden flex-1 flex flex-col items-center justify-center p-6 relative bg-gray-900 overflow-hidden">
+        <div class="absolute inset-0 bg-gradient-to-b from-gray-900 via-gray-800 to-black z-0"></div>
+        
+        <h1 class="text-5xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-yellow-400 to-yellow-600 mb-10 drop-shadow-[0_5px_5px_rgba(0,0,0,0.8)] z-10 tracking-widest uppercase text-center mt-12">Menschenkenner</h1>
+        
+        <div id="podium-container" class="flex flex-wrap items-end justify-center gap-2 md:gap-6 min-h-[350px] md:min-h-[450px] w-full max-w-6xl z-10"></div>
+        
+        <button onclick="location.reload()" class="mt-12 mb-6 px-8 py-4 bg-gradient-to-r from-gray-800 to-gray-700 hover:from-gray-700 hover:to-gray-600 rounded-xl font-bold text-white text-lg transition-all shadow-xl z-10 border border-gray-600 hover:scale-105"><i class="fa-solid fa-rotate-right mr-2"></i> Neues Spiel</button>
+    </div>
+
+    <div id="screen-score-editor" class="hidden fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4 backdrop-blur-sm transition-all">
+        <div class="glass p-8 rounded-2xl w-full max-w-2xl shadow-2xl relative flex flex-col max-h-[90vh]">
+            <h2 class="text-3xl font-bold mb-6 text-cyanAccent"><i class="fa-solid fa-sliders"></i> Lobby Verwalten</h2>
+            <p class="text-gray-400 mb-4 text-sm">Hier kannst du Punkte korrigieren oder Spieler aus dem Spiel werfen.</p>
+            
+            <div id="score-editor-list" class="flex-1 overflow-y-auto space-y-3 pr-2 mb-6">
+                </div>
+            
+            <div class="mt-auto pt-4 border-t border-gray-700">
+                <button onclick="document.getElementById('screen-score-editor').classList.add('hidden')" class="w-full py-4 bg-deepPurple hover:bg-blue-600 rounded-xl font-bold text-white text-lg transition-colors btn-press shadow-lg">
+                    Fertig
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const PLAYER_COLORS = ['#EF4444', '#3B82F6', '#10B981', '#F59E0B', '#EC4899', '#8B5CF6', '#06B6D4', '#F97316', '#14B8A6', '#84CC16'];
+
+        const Sound = {
+            ctx: new (window.AudioContext || window.webkitAudioContext)(),
+            playTone(freq, type, duration, vol=0.1) {
+                if(this.ctx.state === 'suspended') this.ctx.resume();
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + duration);
+            },
+            buzz() { this.playTone(150, 'sawtooth', 0.5, 0.2); },
+            correct() { 
+                this.playTone(600, 'sine', 0.1, 0.1); 
+                setTimeout(() => this.playTone(800, 'sine', 0.3, 0.1), 100); 
+            },
+            wrong() { this.playTone(100, 'square', 0.4, 0.2); },
+            timeUp() { this.playTone(120, 'sawtooth', 1.0, 0.2); },
+            win() {
+                [300, 400, 500, 600, 800].forEach((f, i) => {
+                    setTimeout(() => this.playTone(f, 'sine', 0.2, 0.1), i * 150);
+                });
+            }
+        };
+
+        const AppState = {
+            peer: null,
+            isHost: false,
+            gameStarted: false,
+            lobbyId: null,
+            inviteLink: null,
+            connections: {}, 
+            players: [], 
+            currentQuestion: null,
+            buzzerLocked: true,
+            myId: null,
+            myName: '',
+            myColor: '#ffffff',
+            hostConn: null,
+            myScore: 0,
+            pingInterval: null,
+            timerInterval: null,
+            revealTimeout: null
+        };
+
+        const Storage = {
+            getKey: () => 'kennenlern_data_v1',
+            getFallbackBoard(multiplier = 1, suffix = "A") {
+                return [
+                    { name: `Hobbys & Freizeit`, questions: [
+                        { q: "Baut gerne an eigener PC-Hardware oder bastelt Elektronik.", a: "Name der Person", pts: 100 * multiplier, used: false, image: "", audio: "" },
+                        { q: "Schreibt in der Freizeit eigene Rap-Songtexte.", a: "Name der Person", pts: 200 * multiplier, used: false, image: "", audio: "" },
+                        { q: "Programmiert gerne kleine Apps oder Webseiten.", a: "Name der Person", pts: 300 * multiplier, used: false, image: "", audio: "" },
+                        { q: "Spielt leidenschaftlich gerne Online-Multiplayer-Spiele.", a: "Name der Person", pts: 400 * multiplier, used: false, image: "", audio: "" },
+                        { q: "Interessiert sich dafür, digitale Produkte im Internet zu verkaufen.", a: "Name der Person", pts: 500 * multiplier, used: false, image: "", audio: "" }
+                    ]},
+                    { name: `Haustiere`, questions: [
+                        { q: "Hat einen Hund, der extrem verfressen ist.", a: "Name der Person", pts: 100 * multiplier, used: false, image: "", audio: "" },
+                        { q: "Besitzt mehr als 3 Katzen.", a: "Name der Person", pts: 200 * multiplier, used: false, image: "", audio: "" },
+                        { q: "Hatte als Kind ein sehr ungewöhnliches Haustier (z.B. Echse).", a: "Name der Person", pts: 300 * multiplier, used: false, image: "", audio: "" },
+                        { q: "Hat eine Tierhaarallergie.", a: "Name der Person", pts: 400 * multiplier, used: false, image: "", audio: "" },
+                        { q: "Kümmert sich um ein Pferd.", a: "Name der Person", pts: 500 * multiplier, used: false, image: "", audio: "" }
+                    ]},
+                    { name: `Reisen & Urlaub`, questions: [
+                        { q: "War dieses Jahr schon in Italien.", a: "Name der Person", pts: 100 * multiplier, used: false, image: "", audio: "" },
+                        { q: "Liebt Camping und Zelturlaube.", a: "Name der Person", pts: 200 * multiplier, used: false, image: "", audio: "" },
+                        { q: "Fliegt nicht gerne und fährt lieber Auto.", a: "Name der Person", pts: 300 * multiplier, used: false, image: "", audio: "" },
+                        { q: "Träumt davon, einmal nach Japan zu reisen.", a: "Name der Person", pts: 400 * multiplier, used: false, image: "", audio: "" },
+                        { q: "Hat schon mal einen Flug verpasst.", a: "Name der Person", pts: 500 * multiplier, used: false, image: "", audio: "" }
+                    ]}
+                ];
+            },
+            load() {
+                try {
+                    const data = localStorage.getItem(this.getKey());
+                    if (data) {
+                        const parsed = JSON.parse(data);
+                        if (Array.isArray(parsed) && parsed.length === 2 && Array.isArray(parsed[0])) {
+                            return parsed;
+                        }
+                    }
+                } catch(e) { console.error("Fehler beim Laden der Spieldaten", e); }
+                
+                const fallback = [this.getFallbackBoard(1, "1"), this.getFallbackBoard(2, "2")];
+                localStorage.setItem(this.getKey(), JSON.stringify(fallback));
+                return fallback;
+            },
+            save(data) { localStorage.setItem(this.getKey(), JSON.stringify(data)); }
+        };
+
+        const UI = {
+            screens: ['screen-role', 'screen-host-lobby', 'screen-editor', 'screen-host-buzzer', 'screen-player-join', 'screen-player-waiting', 'screen-player-buzzer', 'screen-podium'],
+            show(screenId) {
+                this.screens.forEach(s => document.getElementById(s).classList.add('hidden'));
+                document.getElementById(screenId).classList.remove('hidden');
+            }
+        };
+
+        const Editor = {
+            currentBoard: 0,
+            switchBoard(idx) {
+                this.currentBoard = idx;
+                document.getElementById('tab-board-0').className = idx === 0 ? "flex-1 py-3 rounded-lg bg-deepPurple text-white font-bold transition" : "flex-1 py-3 rounded-lg bg-gray-700 text-gray-300 font-bold transition";
+                document.getElementById('tab-board-1').className = idx === 1 ? "flex-1 py-3 rounded-lg bg-deepPurple text-white font-bold transition" : "flex-1 py-3 rounded-lg bg-gray-700 text-gray-300 font-bold transition";
+                this.render();
+            },
+            render() {
+                const container = document.getElementById('editor-categories');
+                const allData = Storage.load();
+                const boardData = allData[this.currentBoard];
+                container.innerHTML = '';
+
+                const escapeHtml = (str) => {
+                    if (!str) return '';
+                    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+                };
+
+                boardData.forEach((cat, cIdx) => {
+                    let questionsHtml = '';
+                    cat.questions.forEach((q, qIdx) => {
+                        questionsHtml += `
+                            <div class="bg-gray-900/60 p-4 rounded-xl border border-gray-700/50 grid grid-cols-1 md:grid-cols-4 gap-4 relative">
+                                <div class="md:col-span-1">
+                                    <label class="block text-xs text-purple-400 font-bold mb-1">Punkte</label>
+                                    <input type="number" value="${q.pts}" oninput="Editor.updateQuestion(${cIdx}, ${qIdx}, 'pts', this.value)" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-cyanAccent">
+                                </div>
+                                <div class="md:col-span-3">
+                                    <label class="block text-xs text-cyanAccent font-bold mb-1">Fakt / Frage</label>
+                                    <input type="text" value="${escapeHtml(q.q)}" oninput="Editor.updateQuestion(${cIdx}, ${qIdx}, 'q', this.value)" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-cyanAccent">
+                                </div>
+                                <div class="md:col-span-4">
+                                    <label class="block text-xs text-gray-400 font-bold mb-1">Name der Person (Auflösung)</label>
+                                    <input type="text" value="${escapeHtml(q.a)}" oninput="Editor.updateQuestion(${cIdx}, ${qIdx}, 'a', this.value)" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-cyanAccent">
+                                </div>
+                                <button onclick="Editor.deleteQuestion(${cIdx}, ${qIdx})" class="absolute top-2 right-2 text-red-500 hover:text-red-400 p-1"><i class="fa-solid fa-trash"></i></button>
+                            </div>
+                        `;
+                    });
+
+                    container.innerHTML += `
+                        <div class="bg-gray-800/40 border border-gray-700 p-6 rounded-2xl relative">
+                            <button onclick="Editor.deleteCategory(${cIdx})" class="absolute top-4 right-4 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white transition px-3 py-1.5 rounded-lg text-xs font-bold"><i class="fa-solid fa-folder-minus"></i> Löschen</button>
+                            <div class="max-w-xs mb-4">
+                                <label class="block text-xs text-gray-400 font-bold mb-1">Kategorie Name</label>
+                                <input type="text" value="${escapeHtml(cat.name)}" oninput="Editor.updateCategoryName(${cIdx}, this.value)" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white font-bold focus:outline-none focus:border-cyanAccent uppercase">
+                            </div>
+                            <div class="grid grid-cols-1 gap-4 mt-4">${questionsHtml}</div>
+                            <button onclick="Editor.addQuestion(${cIdx})" class="mt-4 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs font-bold transition">+ Fakt hinzufügen</button>
+                        </div>
+                    `;
+                });
+            },
+            addCategory() {
+                const allData = Storage.load();
+                allData[this.currentBoard].push({ name: "NEUE KATEGORIE", questions: [] });
+                Storage.save(allData);
+                this.render();
+            },
+            deleteCategory(cIdx) {
+                if(!confirm("Kategorie wirklich löschen?")) return;
+                const allData = Storage.load();
+                allData[this.currentBoard].splice(cIdx, 1);
+                Storage.save(allData);
+                this.render();
+            },
+            updateCategoryName(cIdx, val) {
+                const allData = Storage.load();
+                allData[this.currentBoard][cIdx].name = val.trim();
+                Storage.save(allData);
+            },
+            addQuestion(cIdx) {
+                const allData = Storage.load();
+                const multiplier = this.currentBoard === 0 ? 1 : 2;
+                const nextPts = (allData[this.currentBoard][cIdx].questions.length + 1) * 100 * multiplier;
+                allData[this.currentBoard][cIdx].questions.push({ q: "Hier Fakt eintragen", a: "Hier Person eintragen", pts: nextPts, used: false, image: "", audio: "" });
+                Storage.save(allData);
+                this.render();
+            },
+            deleteQuestion(cIdx, qIdx) {
+                const allData = Storage.load();
+                allData[this.currentBoard][cIdx].questions.splice(qIdx, 1);
+                Storage.save(allData);
+                this.render();
+            },
+            updateQuestion(cIdx, qIdx, field, val) {
+                const allData = Storage.load();
+                if(field === 'pts') allData[this.currentBoard][cIdx].questions[qIdx].pts = parseInt(val) || 0;
+                else allData[this.currentBoard][cIdx].questions[qIdx][field] = val.trim();
+                Storage.save(allData);
+            },
+            exportJSON() {
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(Storage.load(), null, 2));
+                const downloadAnchor = document.createElement('a');
+                downloadAnchor.setAttribute("href", dataStr);
+                downloadAnchor.setAttribute("download", "kennenlern_fakten.json");
+                document.body.appendChild(downloadAnchor);
+                downloadAnchor.click();
+                downloadAnchor.remove();
+            },
+            importJSON(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const parsed = JSON.parse(e.target.result);
+                        if (Array.isArray(parsed)) {
+                            if (Array.isArray(parsed[0])) { Storage.save(parsed); } 
+                            else { Storage.save([parsed, Storage.getFallbackBoard(2, "2")]); }
+                            this.render();
+                            alert("✅ Import erfolgreich!");
+                        } else { alert("❌ Ungültiges Format!"); }
+                    } catch(err) { alert("❌ Fehler beim Lesen der Datei!"); }
+                    event.target.value = '';
+                };
+                reader.readAsText(file);
+            }
+        };
+
+        const App = {
+            init() {
+                const urlParams = new URLSearchParams(window.location.search);
+                const code = urlParams.get('code') || urlParams.get('lobby');
+                
+                if(code) {
+                    document.getElementById('player-lobby-input').value = code;
+                    App.showPlayerJoin();
+                    
+                    setTimeout(() => {
+                        const name = prompt("Du wurdest zum Kennenlern-Duell eingeladen! Bitte gib deinen echten Namen ein:");
+                        if(name && name.trim() !== "") {
+                            document.getElementById('player-name-input').value = name.trim();
+                            Player.join();
+                        } else {
+                            document.getElementById('player-name-input').focus();
+                        }
+                    }, 300);
+                } else {
+                    UI.show('screen-role');
+                }
+            },
+            showRoleSelect() { UI.show('screen-role'); },
+            showPlayerJoin() { UI.show('screen-player-join'); },
+            generateId() { return Math.random().toString(36).substring(2, 7).toUpperCase(); },
+
+            initHost() {
+                AppState.isHost = true;
+                AppState.lobbyId = App.generateId();
+                UI.show('screen-host-lobby');
+                document.getElementById('host-lobby-id').innerText = AppState.lobbyId;
+                
+                const joinUrl = `https://scheilutz-star.github.io/gamehub/kennenlernen?code=${AppState.lobbyId}`;
+                AppState.inviteLink = joinUrl; 
+                
+                new QRious({ element: document.getElementById('qr-code'), value: joinUrl, size: 150, backgroundAlpha: 0, foreground: '#10B981' });
+
+                AppState.peer = new Peer(AppState.lobbyId);
+                AppState.peer.on('connection', conn => Host.handleConnection(conn));
+            },
+
+            toggleEditor() {
+                const editorScreen = document.getElementById('screen-editor');
+                if(editorScreen.classList.contains('hidden')) {
+                    Editor.render();
+                    UI.show('screen-editor');
+                } else {
+                    UI.show('screen-host-lobby');
+                }
+            },
+
+            startHostGame() {
+                if(Object.keys(AppState.connections).length === 0 && !confirm("Noch keine Spieler da. Trotzdem starten?")) return;
+                
+                AppState.gameStarted = true;
+                const allData = Storage.load();
+                // Setze alle Fragen auf "nicht benutzt" zum Start
+                allData.forEach(board => board.forEach(cat => cat.questions.forEach(q => q.used = false)));
+                Storage.save(allData);
+
+                Host.nextRandomQuestion();
+            },
+            endGame() {
+                if(!confirm("Möchtest du das Kennenlern-Duell wirklich beenden?")) return;
+                if(AppState.revealTimeout) clearTimeout(AppState.revealTimeout);
+                const finalScores = Object.values(AppState.connections).map(p => ({ name: p.name, score: p.score, color: p.color }));
+                Host.broadcast({ type: 'game_over', scores: finalScores });
+                Player.handleHostData({ type: 'game_over', scores: finalScores });
+            }
+        };
+
+        const Host = {
+            showCopyMenu() {
+                document.getElementById('copy-modal').classList.remove('hidden');
+                document.getElementById('copy-feedback').classList.add('hidden');
+            },
+
+            copyToClipboard(type) {
+                const textToCopy = type === 'code' ? AppState.lobbyId : AppState.inviteLink;
+                navigator.clipboard.writeText(textToCopy).then(() => {
+                    const feedback = document.getElementById('copy-feedback');
+                    feedback.innerHTML = type === 'code' ? '<i class="fa-solid fa-check mr-1"></i> Code kopiert!' : '<i class="fa-solid fa-check mr-1"></i> Link kopiert!';
+                    feedback.classList.remove('hidden');
+                    
+                    setTimeout(() => {
+                        document.getElementById('copy-modal').classList.add('hidden');
+                    }, 1500);
+                }).catch(err => {
+                    console.error("Fehler beim Kopieren: ", err);
+                    alert("Kopieren fehlgeschlagen. Bitte manuell markieren.");
+                });
+            },
+
+            handleConnection(conn) {
+                conn.on('data', data => {
+                    if(data.type === 'join') {
+                        const usedColors = Object.values(AppState.connections).map(p => p.color);
+                        const assignedColor = PLAYER_COLORS.find(c => !usedColors.includes(c)) || PLAYER_COLORS[Object.keys(AppState.connections).length % PLAYER_COLORS.length];
+
+                        AppState.connections[conn.peer] = { conn, name: data.name, score: 0, ping: 0, color: assignedColor };
+                        Host.updatePlayerList();
+                        conn.send({ type: 'welcome', score: 0, color: assignedColor });
+
+                        // Falls das Spiel schon gestartet ist, werfe den Spieler direkt in die aktuelle Frage
+                        if (AppState.gameStarted && AppState.currentQuestion) {
+                            conn.send({ 
+                                type: 'question_view', 
+                                catName: AppState.currentQuestion.catName, 
+                                pts: AppState.currentQuestion.pts, 
+                                q: AppState.currentQuestion.q, 
+                                image: AppState.currentQuestion.image, 
+                                audio: AppState.currentQuestion.audio 
+                            });
+                            if(!AppState.buzzerLocked) {
+                                conn.send({ type: 'question_active' });
+                            }
+                        }
+                    }
+                    else if(data.type === 'ping') { conn.send({ type: 'pong', time: data.time }); }
+                    else if(data.type === 'buzz') { Host.handleBuzz(conn.peer, data.name); }
+                });
+
+                conn.on('close', () => { 
+                    if(AppState.connections[conn.peer]) {
+                        Host.removePlayer(conn.peer); 
+                    }
+                });
+            },
+
+            updatePlayerList() {
+                const currentPlayers = Object.values(AppState.connections);
+                const countElem = document.getElementById('host-player-count');
+                if(countElem) countElem.innerText = `${currentPlayers.length}/30`;
+                
+                const list = document.getElementById('host-player-list');
+                if(list) {
+                    list.innerHTML = '';
+                    if(currentPlayers.length === 0) {
+                        list.innerHTML = '<div class="text-gray-500 italic text-center mt-10">Warte auf Spieler...</div>';
+                    } else {
+                        currentPlayers.forEach(p => {
+                            list.innerHTML += `<div class="bg-gray-800 p-3 rounded-lg flex justify-between items-center border-l-4" style="border-color: ${p.color}">
+                                <span class="font-bold" style="color: ${p.color}">${p.name}</span>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs bg-gray-900 px-2 py-1 rounded text-green-400">Verbunden</span>
+                                    <button onclick="Host.kickPlayer('${p.conn.peer}')" class="text-gray-500 hover:text-red-500 transition" title="Spieler kicken"><i class="fa-solid fa-door-open"></i></button>
+                                </div>
+                            </div>`;
+                        });
+                    }
+                }
+                Host.renderLiveScores();
+                Host.broadcast({ type: 'sync_players', players: currentPlayers.map(p => ({ name: p.name, score: p.score, color: p.color })) });
+            },
+
+            kickPlayer(peerId) {
+                if(confirm(`Möchtest du diesen Spieler wirklich aus dem Spiel entfernen?`)) {
+                    if(AppState.connections[peerId]) {
+                        AppState.connections[peerId].conn.send({ type: 'kicked' });
+                        setTimeout(() => { Host.removePlayer(peerId); }, 500); 
+                    }
+                }
+            },
+
+            removePlayer(peerId) {
+                if(AppState.connections[peerId]) {
+                    AppState.connections[peerId].conn.close();
+                    delete AppState.connections[peerId];
+                    Host.updatePlayerList();
+                    Host.openScoreEditor(); 
+                }
+            },
+
+            broadcast(data) { Object.values(AppState.connections).forEach(c => { if(c.conn && c.conn.open) c.conn.send(data); }); },
+
+            updatePlayerScores() {
+                Object.keys(AppState.connections).forEach(k => {
+                    AppState.connections[k].conn.send({ type: 'score_update', score: AppState.connections[k].score });
+                });
+                Host.renderLiveScores();
+                Host.broadcast({ type: 'sync_players', players: Object.values(AppState.connections).map(p => ({ name: p.name, score: p.score, color: p.color })) });
+            },
+
+            openScoreEditor() {
+                const list = document.getElementById('score-editor-list');
+                list.innerHTML = '';
+                
+                const players = Object.keys(AppState.connections);
+                if(players.length === 0) {
+                    list.innerHTML = '<div class="text-gray-500 italic text-center py-4">Keine Spieler verbunden.</div>';
+                } else {
+                    players.forEach(pId => {
+                        const p = AppState.connections[pId];
+                        list.innerHTML += `
+                            <div class="flex flex-col sm:flex-row justify-between items-center bg-gray-900/60 p-4 rounded-xl border border-gray-700/50 gap-4">
+                                <div class="flex items-center gap-3 w-full sm:w-auto justify-between">
+                                    <span class="font-bold text-lg" style="color: ${p.color}">${p.name}</span>
+                                    <button onclick="Host.kickPlayer('${pId}')" class="text-gray-500 hover:text-red-500 bg-gray-800 px-3 py-1 rounded transition sm:hidden"><i class="fa-solid fa-door-open"></i> Kick</button>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <button onclick="Host.adjustScore('${pId}', -100)" class="w-10 h-10 bg-red-600/80 hover:bg-red-500 rounded-full font-black text-white transition btn-press">-100</button>
+                                    <input type="number" id="edit-score-${pId}" value="${p.score}" onchange="Host.setScore('${pId}', this.value)" class="w-24 bg-gray-800 border border-gray-600 rounded-lg text-center py-2 text-white font-mono font-bold text-lg focus:outline-none focus:border-cyanAccent">
+                                    <button onclick="Host.adjustScore('${pId}', 100)" class="w-10 h-10 bg-green-600/80 hover:bg-green-500 rounded-full font-black text-white transition btn-press">+100</button>
+                                    <button onclick="Host.kickPlayer('${pId}')" class="text-gray-500 hover:text-red-500 bg-gray-800 px-3 py-2 rounded transition hidden sm:block ml-2" title="Spieler aus Lobby entfernen"><i class="fa-solid fa-door-open"></i></button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+                
+                document.getElementById('screen-score-editor').classList.remove('hidden');
+            },
+
+            adjustScore(pId, amount) {
+                if(AppState.connections[pId]) {
+                    AppState.connections[pId].score += amount;
+                    document.getElementById(`edit-score-${pId}`).value = AppState.connections[pId].score;
+                    Host.updatePlayerScores();
+                }
+            },
+
+            setScore(pId, value) {
+                if(AppState.connections[pId]) {
+                    AppState.connections[pId].score = parseInt(value) || 0;
+                    Host.updatePlayerScores();
+                }
+            },
+
+            renderLiveScores() {
+                const container = document.getElementById('host-live-scores');
+                if(!container) return;
+                container.innerHTML = '';
+                Object.values(AppState.connections).sort((a,b)=>b.score-a.score).forEach(p => {
+                    container.innerHTML += `<div class="bg-gray-800 px-4 py-2 rounded-full flex gap-3 items-center border whitespace-nowrap shadow-md" style="border-color: ${p.color}">
+                        <span class="font-bold" style="color: ${p.color}">${p.name}</span> <span class="text-green-400 font-mono font-bold">${p.score}</span>
+                    </div>`;
+                });
+            },
+
+            resetTimerUI() {
+                if(AppState.timerInterval) clearInterval(AppState.timerInterval);
+                document.getElementById('host-global-timer-btn').classList.remove('hidden');
+                document.getElementById('host-timer-display').classList.add('hidden');
+            },
+
+            nextRandomQuestion() {
+                const allData = Storage.load();
+                let pool = [];
+                
+                // Alle unbenutzten Fragen aus allen Boards in einen Pool legen
+                allData.forEach((board, bIdx) => {
+                    board.forEach((cat, cIdx) => {
+                        cat.questions.forEach((q, qIdx) => {
+                            if (!q.used) pool.push({bIdx, cIdx, qIdx, ...q, catName: cat.name});
+                        });
+                    });
+                });
+
+                if (pool.length === 0) {
+                    App.endGame();
+                    return;
+                }
+
+                // Zufälligen Fakt auswählen
+                const randomQ = pool[Math.floor(Math.random() * pool.length)];
+                AppState.currentQuestion = randomQ;
+                
+                AppState.buzzerLocked = true;
+                Host.resetTimerUI(); 
+                
+                document.getElementById('active-q-category').innerText = `${randomQ.catName} - ${randomQ.pts}`;
+                document.getElementById('active-q-text').innerText = randomQ.q;
+                document.getElementById('active-q-answer').innerText = randomQ.a;
+                
+                const hostImgContainer = document.getElementById('host-active-q-image-container');
+                const hostImg = document.getElementById('host-active-q-image');
+                if (randomQ.image && randomQ.image.trim() !== "") {
+                    hostImg.src = randomQ.image;
+                    hostImgContainer.classList.remove('hidden');
+                } else {
+                    hostImgContainer.classList.add('hidden');
+                    hostImg.src = "";
+                }
+
+                const hostAudioContainer = document.getElementById('host-active-q-audio-container');
+                const hostAudio = document.getElementById('host-active-q-audio');
+                if (randomQ.audio && randomQ.audio.trim() !== "") {
+                    hostAudio.src = randomQ.audio;
+                    hostAudioContainer.classList.remove('hidden');
+                    hostAudio.load();
+                    hostAudio.play().catch(e => console.log("Audio-Autoplay blockiert:", e));
+                } else {
+                    hostAudioContainer.classList.add('hidden');
+                    hostAudio.src = "";
+                }
+                
+                UI.show('screen-host-buzzer');
+                Host.renderLiveScores();
+                
+                Host.broadcast({ 
+                    type: 'question_view', 
+                    catName: randomQ.catName, 
+                    pts: randomQ.pts, 
+                    q: randomQ.q, 
+                    image: randomQ.image, 
+                    audio: randomQ.audio 
+                });
+
+                document.getElementById('buzzer-status-area').classList.remove('hidden');
+                document.getElementById('buzzer-action-area').classList.add('hidden');
+                document.getElementById('buzzer-status-area').innerHTML = `
+                    <button onclick="Host.unlockBuzzers()" class="px-8 py-4 bg-cyanAccent hover:bg-emerald-400 text-darkBg font-bold rounded-xl text-xl transition shadow-[0_0_20px_rgba(16,185,129,0.4)] btn-press">
+                        <i class="fa-solid fa-play"></i> Buzzer Freigeben
+                    </button>
+                `;
+            },
+
+            unlockBuzzers() {
+                AppState.buzzerLocked = false;
+                Host.resetTimerUI(); 
+                
+                const statusArea = document.getElementById('buzzer-status-area');
+                statusArea.classList.remove('hidden');
+                
+                statusArea.innerHTML = `
+                    <div class="text-6xl animate-pulse mb-2 text-cyanAccent"><i class="fa-solid fa-bolt"></i></div>
+                    <p class="text-xl text-cyanAccent font-bold mb-6">Wer ist es? Buzzer sind scharf!</p>
+                `;
+                
+                document.getElementById('buzzer-action-area').classList.add('hidden');
+
+                const hostAudio = document.getElementById('host-active-q-audio');
+                if (hostAudio && hostAudio.src) {
+                    hostAudio.play().catch(e => {});
+                }
+
+                Host.broadcast({ type: 'question_active' });
+                Sound.correct();
+            },
+
+            startTimer() {
+                if(AppState.timerInterval) clearInterval(AppState.timerInterval); 
+
+                Host.broadcast({ type: 'start_timer', seconds: 30 });
+                
+                document.getElementById('host-global-timer-btn').classList.add('hidden');
+                const display = document.getElementById('host-timer-display');
+                display.classList.remove('hidden');
+                display.innerText = '30';
+                display.classList.remove('text-red-500', 'drop-shadow-[0_0_15px_rgba(239,68,68,0.5)]');
+                display.classList.add('text-cyanAccent', 'drop-shadow-[0_0_10px_rgba(16,185,129,0.5)]');
+
+                let timeLeft = 30;
+                
+                AppState.timerInterval = setInterval(() => {
+                    timeLeft--;
+                    if (display) display.innerText = timeLeft;
+                    
+                    if (timeLeft <= 10 && display) {
+                        display.classList.replace('text-cyanAccent', 'text-red-500');
+                        display.classList.replace('drop-shadow-[0_0_10px_rgba(16,185,129,0.5)]', 'drop-shadow-[0_0_15px_rgba(239,68,68,0.5)]');
+                    }
+                    
+                    if (timeLeft <= 0) {
+                        clearInterval(AppState.timerInterval);
+                        Host.triggerTimeUp();
+                    }
+                }, 1000);
+            },
+
+            triggerTimeUp() {
+                AppState.buzzerLocked = true;
+                Host.resetTimerUI(); 
+                
+                Sound.timeUp(); 
+                Host.broadcast({ type: 'time_up' });
+                
+                document.getElementById('buzzer-status-area').classList.add('hidden');
+                document.getElementById('buzzer-action-area').classList.remove('hidden');
+                
+                const actionArea = document.getElementById('buzzer-action-area');
+                const titleElement = document.createElement('div');
+                titleElement.innerHTML = `<h3 class="text-3xl font-extrabold mb-4 text-red-500">⏰ Zeit abgelaufen!</h3>`;
+                
+                if(actionArea.firstChild && actionArea.firstChild.tagName === 'DIV' && actionArea.firstChild.querySelector('h3')) {
+                    actionArea.replaceChild(titleElement, actionArea.firstChild);
+                } else {
+                    actionArea.insertBefore(titleElement, actionArea.firstChild);
+                }
+            },
+
+            handleBuzz(peerId, name) {
+                if(AppState.buzzerLocked) return;
+                AppState.buzzerLocked = true;
+                
+                Host.resetTimerUI(); 
+                Sound.buzz();
+
+                const hostAudio = document.getElementById('host-active-q-audio');
+                if (hostAudio) hostAudio.pause();
+                
+                const winnerColor = AppState.connections[peerId]?.color || '#10B981';
+                Host.broadcast({ type: 'buzzer_locked', winner: name, color: winnerColor });
+                
+                document.getElementById('buzzer-status-area').classList.add('hidden');
+                document.getElementById('buzzer-action-area').classList.remove('hidden');
+                
+                const actionArea = document.getElementById('buzzer-action-area');
+                const titleElement = document.createElement('div');
+                titleElement.innerHTML = `<h3 class="text-3xl font-extrabold mb-4 animate-bounce" style="color: ${winnerColor}">🥇 ${name} hat eine Vermutung!</h3>`;
+                if(actionArea.firstChild && actionArea.firstChild.tagName === 'DIV' && actionArea.firstChild.querySelector('h3')) {
+                    actionArea.replaceChild(titleElement, actionArea.firstChild);
+                } else { actionArea.insertBefore(titleElement, actionArea.firstChild); }
+                
+                AppState.currentBuzzer = peerId;
+            },
+
+            judgeAnswer(isCorrect) {
+                Host.resetTimerUI();
+                const pts = AppState.currentQuestion.pts;
+                const pId = AppState.currentBuzzer;
+                const playerName = AppState.connections[pId] ? AppState.connections[pId].name : "Jemand";
+                
+                if(isCorrect) {
+                    const hostAudio = document.getElementById('host-active-q-audio');
+                    if (hostAudio) { hostAudio.pause(); hostAudio.src = ""; }
+
+                    Sound.correct();
+                    if(AppState.connections[pId]) AppState.connections[pId].score += pts;
+                    Host.triggerReveal(true, playerName);
+                } else {
+                    Sound.wrong();
+                    // Volle Minuspunkte bei falscher Antwort
+                    if(AppState.connections[pId]) AppState.connections[pId].score -= pts;
+                    Host.updatePlayerScores();
+                    Host.unlockBuzzers(); // Wieder freigeben für die anderen
+                }
+            },
+
+            skipQuestion() {
+                if(!AppState.currentQuestion) return;
+                Host.resetTimerUI();
+
+                const hostAudio = document.getElementById('host-active-q-audio');
+                if (hostAudio) { hostAudio.pause(); hostAudio.src = ""; }
+                
+                Host.triggerReveal(false, null);
+            },
+
+            triggerReveal(wasCorrect, playerName) {
+                AppState.buzzerLocked = true; 
+
+                const q = AppState.currentQuestion;
+                
+                document.getElementById('buzzer-action-area').classList.add('hidden');
+                document.getElementById('buzzer-status-area').classList.remove('hidden');
+                
+                let titleMsg = wasCorrect ? `<span class="text-green-500">${playerName} lag richtig!</span>` : `<span class="text-red-500">Niemand lag richtig.</span>`;
+                if (!wasCorrect && playerName === null) titleMsg = `<span class="text-amber-500">Übersprungen</span>`;
+
+                document.getElementById('buzzer-status-area').innerHTML = `
+                    <h3 class="text-2xl font-bold mb-2">${titleMsg}</h3>
+                    <p class="text-gray-300">Die gesuchte Person war:</p>
+                    <div class="text-5xl font-black text-cyanAccent mb-4 mt-2">${q.a}</div>
+                    <p class="text-gray-400 animate-pulse text-sm"><i class="fa-solid fa-spinner fa-spin"></i> Nächste Frage lädt...</p>
+                `;
+
+                Host.broadcast({
+                    type: 'reveal',
+                    answer: q.a,
+                    wasCorrect: wasCorrect,
+                    player: playerName
+                });
+
+                // Fakt als benutzt markieren und speichern
+                const allData = Storage.load();
+                allData[q.bIdx][q.cIdx].questions[q.qIdx].used = true;
+                Storage.save(allData);
+                Host.updatePlayerScores();
+
+                // 4 Sekunden warten, dann automatisch die nächste Frage
+                AppState.revealTimeout = setTimeout(() => {
+                    Host.nextRandomQuestion();
+                }, 4000);
+            }
+        };
+
+        const Player = {
+            join() {
+                const name = document.getElementById('player-name-input').value.trim();
+                const lobby = document.getElementById('player-lobby-input').value.trim().toUpperCase();
+                const errBox = document.getElementById('join-error');
+                
+                if(!name || !lobby) { errBox.innerText = "Bitte Name und Code eingeben."; errBox.classList.remove('hidden'); return; }
+                
+                const btn = document.getElementById('btn-join');
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Verbinde...';
+                btn.disabled = true;
+
+                AppState.myName = name;
+                AppState.peer = new Peer();
+                
+                AppState.peer.on('open', id => {
+                    AppState.myId = id;
+                    const conn = AppState.peer.connect(lobby);
+                    
+                    conn.on('open', () => {
+                        AppState.hostConn = conn;
+                        conn.send({ type: 'join', name });
+                        AppState.pingInterval = setInterval(() => { conn.send({ type: 'ping', time: Date.now() }); }, 2000);
+                    });
+
+                    conn.on('data', data => Player.handleHostData(data));
+                    
+                    conn.on('close', () => { alert('Verbindung verloren.'); location.reload(); });
+                    AppState.peer.on('error', err => {
+                        errBox.innerText = "Lobby nicht gefunden!";
+                        errBox.classList.remove('hidden');
+                        btn.innerHTML = 'Verbinden';
+                        btn.disabled = false;
+                    });
+                });
+            },
+
+            handleHostData(data) {
+                if(data.type === 'kicked') {
+                    alert("Du wurdest vom Moderator aus dem Spiel entfernt.");
+                    window.location.href = window.location.pathname; 
+                    return;
+                }
+                if(data.type === 'welcome') {
+                    AppState.myColor = data.color;
+                    UI.show('screen-player-waiting');
+                    document.getElementById('display-player-name').innerText = AppState.myName;
+                    document.getElementById('display-player-name').style.color = data.color;
+                    document.getElementById('giant-buzzer').style.borderColor = data.color;
+                    Player.updateScore(data.score);
+                }
+                else if(data.type === 'sync_players') { Player.renderPlayerList(data.players); }
+                else if(data.type === 'pong') { document.getElementById('player-ping').innerText = Date.now() - data.time; }
+                else if(data.type === 'score_update') { Player.updateScore(data.score); }
+                else if(data.type === 'question_view') {
+                    UI.show('screen-player-buzzer');
+                    document.getElementById('buzzer-name').innerText = AppState.myName;
+                    document.getElementById('buzzer-name').style.color = AppState.myColor;
+                    document.getElementById('player-active-q-category').innerText = `${data.catName} - ${data.pts} Punkte`;
+                    document.getElementById('player-active-q-text').innerText = data.q;
+
+                    const playerImgContainer = document.getElementById('player-active-q-image-container');
+                    const playerImg = document.getElementById('player-active-q-image');
+                    if (data.image && data.image.trim() !== "") {
+                        playerImg.src = data.image;
+                        playerImgContainer.classList.remove('hidden');
+                    } else {
+                        playerImgContainer.classList.add('hidden');
+                        playerImg.src = "";
+                    }
+
+                    const playerAudioContainer = document.getElementById('player-active-q-audio-container');
+                    const playerAudio = document.getElementById('player-active-q-audio');
+                    if (data.audio && data.audio.trim() !== "") {
+                        playerAudio.src = data.audio;
+                        playerAudioContainer.classList.remove('hidden');
+                        playerAudio.load();
+                    } else {
+                        playerAudioContainer.classList.add('hidden');
+                        playerAudio.src = "";
+                    }
+
+                    // Reset styling falls von Reveal modifiziert
+                    document.getElementById('overlay-title').classList.remove('text-cyanAccent', 'text-4xl', 'md:text-5xl');
+                    document.getElementById('overlay-title').classList.add('text-3xl', 'md:text-4xl');
+                    
+                    Player.setBuzzerOverlay('Achtung', 'Fakt wird vorbereitet...', 'fa-hourglass-start', true);
+                }
+                else if(data.type === 'question_active') {
+                    document.getElementById('buzzer-overlay').classList.add('hidden');
+                    document.getElementById('player-timer-container').classList.add('hidden');
+                    document.getElementById('player-timer-text').classList.add('hidden');
+                    clearInterval(AppState.timerInterval);
+                    
+                    if(navigator.vibrate) navigator.vibrate(50);
+                }
+                else if(data.type === 'start_timer') {
+                    const container = document.getElementById('player-timer-container');
+                    const bar = document.getElementById('player-timer-bar');
+                    const text = document.getElementById('player-timer-text');
+                    
+                    container.classList.remove('hidden');
+                    text.classList.remove('hidden');
+                    
+                    bar.style.width = '100%';
+                    bar.classList.replace('bg-red-500', 'bg-cyanAccent');
+                    text.classList.replace('text-red-500', 'text-cyanAccent');
+                    text.classList.replace('border-red-500', 'border-cyanAccent');
+                    text.innerText = data.seconds;
+                    
+                    clearInterval(AppState.timerInterval);
+                    let timeLeft = data.seconds;
+                    
+                    AppState.timerInterval = setInterval(() => {
+                        timeLeft--;
+                        text.innerText = timeLeft;
+                        bar.style.width = `${(timeLeft / data.seconds) * 100}%`;
+                        
+                        if(timeLeft <= 10) {
+                            bar.classList.replace('bg-cyanAccent', 'bg-red-500');
+                            text.classList.replace('text-cyanAccent', 'text-red-500');
+                            text.classList.replace('border-cyanAccent', 'border-red-500');
+                        }
+                        
+                        if(timeLeft <= 0) {
+                            clearInterval(AppState.timerInterval);
+                        }
+                    }, 1000);
+                }
+                else if(data.type === 'time_up') {
+                    clearInterval(AppState.timerInterval);
+                    document.getElementById('player-timer-container').classList.add('hidden');
+                    document.getElementById('player-timer-text').classList.add('hidden');
+                    Player.setBuzzerOverlay('Zeit abgelaufen!', 'Niemand hat gedrückt / Zu lange gewartet.', 'fa-clock', true, '#EF4444');
+                }
+                else if(data.type === 'buzzer_locked') {
+                    clearInterval(AppState.timerInterval);
+                    document.getElementById('player-timer-container').classList.add('hidden');
+                    document.getElementById('player-timer-text').classList.add('hidden');
+                    
+                    // Style Reset für normales Locking
+                    document.getElementById('overlay-title').classList.remove('text-cyanAccent', 'text-4xl', 'md:text-5xl');
+                    document.getElementById('overlay-title').classList.add('text-3xl', 'md:text-4xl');
+
+                    if(data.winner === AppState.myName) {
+                        Player.setBuzzerOverlay('DU BIST DRAN!', 'Ruf laut, wer es sein könnte!', 'fa-microphone', true, data.color);
+                    } else {
+                        Player.setBuzzerOverlay(`${data.winner}`, `Darf als Erstes raten!`, 'fa-bolt', true, data.color);
+                    }
+                }
+                else if(data.type === 'reveal') {
+                    clearInterval(AppState.timerInterval);
+                    document.getElementById('player-timer-container').classList.add('hidden');
+                    document.getElementById('player-timer-text').classList.add('hidden');
+                    
+                    const overlay = document.getElementById('buzzer-overlay');
+                    overlay.classList.remove('hidden');
+                    overlay.style.backgroundColor = 'rgba(17, 24, 39, 0.95)';
+                    
+                    const boxEl = document.getElementById('overlay-content-box');
+                    boxEl.style.borderColor = '#10B981';
+                    boxEl.style.boxShadow = '0 10px 40px rgba(16,185,129,0.4)';
+                    
+                    let statusText = data.wasCorrect ? `${data.player} hat es erraten!` : `Runde beendet.`;
+                    
+                    document.getElementById('overlay-title').innerHTML = `<span class="text-sm text-gray-400 block mb-2 font-normal">${statusText}</span>${data.answer}`;
+                    document.getElementById('overlay-title').classList.replace('text-3xl', 'text-4xl');
+                    document.getElementById('overlay-title').classList.replace('md:text-4xl', 'md:text-5xl');
+                    document.getElementById('overlay-title').classList.add('text-cyanAccent');
+                    
+                    document.getElementById('overlay-desc').innerHTML = "<i class='fa-solid fa-spinner fa-spin mr-2'></i> Bereite nächste Frage vor...";
+                    document.getElementById('overlay-icon').className = 'fa-solid fa-check-circle text-6xl mb-3 text-cyanAccent drop-shadow-lg';
+                }
+                else if(data.type === 'game_over') {
+                    UI.show('screen-podium');
+                    const sortedScores = data.scores.sort((a,b) => b.score - a.score);
+                    
+                    let currentRank = 1;
+                    for (let i = 0; i < sortedScores.length; i++) {
+                        if (i > 0 && sortedScores[i].score < sortedScores[i - 1].score) {
+                            currentRank = i + 1;
+                        }
+                        sortedScores[i].rank = currentRank;
+                    }
+
+                    Sound.win();
+                    var duration = 3 * 1000;
+                    var end = Date.now() + duration;
+                    (function frame() {
+                        confetti({ particleCount: 5, angle: 60, spread: 55, origin: { x: 0 }, colors: ['#10B981', '#3B82F6', '#F59E0B'] });
+                        confetti({ particleCount: 5, angle: 120, spread: 55, origin: { x: 1 }, colors: ['#10B981', '#3B82F6', '#F59E0B'] });
+                        if (Date.now() < end) requestAnimationFrame(frame);
+                    }());
+
+                    const container = document.getElementById('podium-container');
+                    container.innerHTML = '';
+                    if(sortedScores.length === 0) return;
+
+                    const rankStyles = {
+                        1: { height: 'h-56 md:h-64', color: 'bg-gradient-to-t from-yellow-600 to-yellow-400', border: 'border-yellow-300', text: 'text-yellow-100', shadow: 'shadow-[0_0_20px_rgba(250,204,21,0.5)]' },
+                        2: { height: 'h-40 md:h-48', color: 'bg-gradient-to-t from-gray-700 to-gray-400', border: 'border-gray-300', text: 'text-gray-100', shadow: 'shadow-[0_0_15px_rgba(156,163,175,0.3)]' },
+                        3: { height: 'h-28 md:h-36', color: 'bg-gradient-to-t from-amber-900 to-amber-600', border: 'border-amber-500', text: 'text-amber-100', shadow: 'shadow-[0_0_10px_rgba(217,119,6,0.3)]' }
+                    };
+
+                    const groups = { 1: [], 2: [], 3: [] };
+                    sortedScores.forEach(p => { if (p.rank <= 3) groups[p.rank].push(p); });
+
+                    const drawGroup = (rankLevel) => {
+                        const playersInRank = groups[rankLevel];
+                        if (!playersInRank || playersInRank.length === 0) return `<div class="w-24 md:w-40"></div>`; 
+                        
+                        const style = rankStyles[rankLevel];
+                        let html = `<div class="flex flex-col items-center justify-end z-10 relative group-container">`;
+                        
+                        html += `<div class="flex flex-wrap justify-center gap-2 mb-2 w-full z-20 px-2 max-w-[300px]">`;
+                        playersInRank.forEach(player => {
+                            const isWinner = rankLevel === 1;
+                            const crown = isWinner ? '<i class="fa-solid fa-crown text-yellow-400 text-2xl md:text-3xl mb-1 drop-shadow-md animate-bounce w-full text-center"></i>' : '';
+                            html += `
+                                <div class="flex flex-col items-center text-center">
+                                    ${crown}
+                                    <div class="bg-gray-900/80 backdrop-blur-md border border-gray-700 rounded-lg px-2 py-1 md:px-3 md:py-2 shadow-lg transform transition hover:scale-105" style="border-bottom: 3px solid ${player.color || '#fff'}">
+                                        <span class="block font-black text-[10px] md:text-sm break-words drop-shadow-md leading-tight" style="color: ${player.color || '#fff'}">${player.name}</span>
+                                        <span class="text-green-400 text-[9px] md:text-xs font-mono font-bold block mt-1">${player.score} Pkt</span>
+                                    </div>
+                                </div>`;
+                        });
+                        html += `</div>`;
+                        
+                        const blockWidth = playersInRank.length > 1 ? 'w-40 md:w-64' : 'w-24 md:w-40';
+                        html += `
+                            <div class="${blockWidth} ${style.height} ${style.color} ${style.shadow} rounded-t-2xl border-t-4 ${style.border} flex justify-center pt-4 relative overflow-hidden">
+                                <div class="absolute inset-0 bg-white opacity-10"></div>
+                                <span class="${style.text} font-black text-4xl md:text-6xl drop-shadow-lg z-10">${rankLevel}</span>
+                            </div>
+                        </div>`;
+                        return html;
+                    };
+
+                    container.innerHTML = drawGroup(2) + drawGroup(1) + drawGroup(3);
+                }
+            },
+
+            updateScore(sc) {
+                AppState.myScore = sc;
+                document.getElementById('player-score-wait').innerText = sc;
+                document.getElementById('player-score-buzz').innerText = sc;
+            },
+
+            renderPlayerList(players) {
+                const container = document.getElementById('player-opponent-list');
+                if(!container) return;
+                container.innerHTML = '';
+                
+                [...players].sort((a,b) => b.score - a.score).forEach(p => {
+                    const isMe = p.name === AppState.myName;
+                    const borderThickness = isMe ? 'border-2' : 'border';
+                    
+                    container.innerHTML += `
+                        <div class="bg-gray-800/80 px-4 py-2 rounded-full ${borderThickness} flex gap-2 items-center flex-shrink-0" style="border-color: ${p.color}">
+                            <span class="font-bold text-sm" style="color: ${p.color}">${p.name} ${isMe ? '(Du)' : ''}</span>
+                            <span class="text-green-400 font-mono text-sm">${p.score}</span>
+                        </div>
+                    `;
+                });
+            },
+
+            setBuzzerOverlay(title, desc, icon, show, color = null) {
+                const overlay = document.getElementById('buzzer-overlay');
+                const titleEl = document.getElementById('overlay-title');
+                const descEl = document.getElementById('overlay-desc');
+                const iconEl = document.getElementById('overlay-icon');
+                const boxEl = document.getElementById('overlay-content-box');
+                
+                titleEl.innerText = title;
+                descEl.innerText = desc;
+                iconEl.className = `fa-solid ${icon} text-6xl mb-3 drop-shadow-lg`;
+                
+                if (color) {
+                    overlay.style.backgroundColor = color + 'CC'; 
+                    boxEl.style.borderColor = color;
+                    boxEl.style.boxShadow = `0 10px 40px ${color}80`;
+                    titleEl.style.color = '#ffffff';
+                    descEl.style.color = '#ffffff';
+                    iconEl.style.color = '#ffffff';
+                } else {
+                    overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.85)';
+                    boxEl.style.borderColor = '#374151';
+                    boxEl.style.boxShadow = '0 10px 40px rgba(0,0,0,0.8)';
+                    titleEl.style.color = '#ffffff';
+                    descEl.style.color = '#9ca3af';
+                    iconEl.style.color = '#9ca3af';
+                }
+                
+                if(show) overlay.classList.remove('hidden'); else overlay.classList.add('hidden');
+            },
+
+            hitBuzzer() {
+                if(!AppState.hostConn) return;
+                Sound.ctx.resume();
+                AppState.hostConn.send({ type: 'buzz', name: AppState.myName });
+                Player.setBuzzerOverlay('Gesendet', 'Signal wird übertragen...', 'fa-paper-plane', true);
+            }
+        };
+
+        const btnBuzzer = document.getElementById('giant-buzzer');
+        btnBuzzer.addEventListener('touchstart', (e) => { e.preventDefault(); Player.hitBuzzer(); }, {passive: false});
+        btnBuzzer.addEventListener('mousedown', (e) => { e.preventDefault(); Player.hitBuzzer(); });
+
+        window.onload = () => App.init();
+    </script>
+</body>
+</html>
