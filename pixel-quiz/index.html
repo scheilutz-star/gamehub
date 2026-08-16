@@ -1,1 +1,1029 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>P2P Pixel Reveal Quiz</title>
+    
+  <link rel="icon" type="image/png" sizes="40x40" href="favicon.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#111827',
+                        cyanAccent: '#00E5FF',
+                        deepPurple: '#7C3AED',
+                        glassBg: 'rgba(255, 255, 255, 0.05)',
+                        glassBorder: 'rgba(255, 255, 255, 0.1)'
+                    }
+                }
+            }
+        }
+    </script>
 
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
+
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #111827; color: #ffffff; overscroll-behavior-y: contain; }
+        .glass { background: var(--glassBg); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--glassBorder); }
+        .btn-press:active { transform: scale(0.95); }
+        .buzzer-btn { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+        
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #111827; }
+        ::-webkit-scrollbar-thumb { background: #7C3AED; border-radius: 4px; }
+
+        canvas { image-rendering: pixelated; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-cyanAccent selection:text-darkBg">
+
+    <!-- Copy Modal -->
+    <div id="copy-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm transition-opacity">
+        <div class="bg-gray-800 p-6 rounded-2xl max-w-sm w-full border border-gray-700 shadow-2xl relative transform transition-transform">
+            <button onclick="document.getElementById('copy-modal').classList.add('hidden')" class="absolute top-4 right-4 text-gray-400 hover:text-white transition">
+                <i class="fa-solid fa-xmark text-xl"></i>
+            </button>
+            <h3 class="text-xl font-bold mb-4 text-cyanAccent"><i class="fa-solid fa-share-nodes mr-2"></i>Lobby teilen</h3>
+            <div class="space-y-3">
+                <button onclick="Host.copyToClipboard('code')" class="w-full py-4 bg-gray-900 hover:bg-gray-700 border border-gray-700 hover:border-cyanAccent rounded-xl flex items-center justify-between px-4 transition btn-press">
+                    <span class="font-bold text-gray-200">Nur Code kopieren</span> <i class="fa-solid fa-hashtag text-cyanAccent text-lg"></i>
+                </button>
+                <button onclick="Host.copyToClipboard('link')" class="w-full py-4 bg-gray-900 hover:bg-gray-700 border border-gray-700 hover:border-cyanAccent rounded-xl flex items-center justify-between px-4 transition btn-press">
+                    <span class="font-bold text-gray-200">Einladungslink kopieren</span> <i class="fa-solid fa-link text-cyanAccent text-lg"></i>
+                </button>
+            </div>
+            <p id="copy-feedback" class="text-green-400 text-sm mt-4 text-center hidden font-bold animate-pulse"><i class="fa-solid fa-check mr-1"></i> Erfolgreich kopiert!</p>
+        </div>
+    </div>
+
+    <!-- Screen: Role Selection -->
+    <div id="screen-role" class="flex-1 flex items-center justify-center p-6">
+        <div class="glass p-8 rounded-2xl w-full max-w-md text-center shadow-2xl">
+            <h1 class="text-4xl font-extrabold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-cyanAccent to-deepPurple">Pixel Quiz</h1>
+            <p class="text-gray-400 mb-8">Wähle deine Rolle für das Spiel</p>
+            
+            <button onclick="App.initHost()" class="w-full mb-4 py-4 rounded-xl bg-deepPurple hover:bg-purple-700 text-white font-bold text-lg transition-colors btn-press flex items-center justify-center gap-3 shadow-lg shadow-purple-900/50">
+                <i class="fa-solid fa-crown"></i> Moderator (Host) erstellen
+            </button>
+            <div class="relative flex py-2 items-center">
+                <div class="flex-grow border-t border-gray-600"></div>
+                <span class="flex-shrink-0 mx-4 text-gray-500 text-sm">oder</span>
+                <div class="flex-grow border-t border-gray-600"></div>
+            </div>
+            <button onclick="App.showPlayerJoin()" class="w-full mt-4 py-4 rounded-xl bg-gray-800 hover:bg-gray-700 border border-gray-600 text-white font-bold text-lg transition-colors btn-press flex items-center justify-center gap-3">
+                <i class="fa-solid fa-gamepad"></i> Als Spieler beitreten
+            </button>
+        </div>
+    </div>
+
+    <!-- Screen: Host Lobby -->
+    <div id="screen-host-lobby" class="hidden flex-1 flex flex-col items-center justify-center p-6">
+        <div class="w-full max-w-5xl grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div class="glass p-8 rounded-2xl flex flex-col items-center text-center">
+                <h2 class="text-2xl font-bold mb-2">Lobby-Code</h2>
+                
+                <div onclick="Host.showCopyMenu()" title="Klicken zum Teilen" class="flex items-center justify-center gap-4 bg-gray-900 hover:bg-gray-800 border border-gray-700 hover:border-cyanAccent py-3 px-6 rounded-xl mb-6 cursor-pointer transition-all group shadow-lg">
+                    <div class="text-5xl font-extrabold tracking-widest text-cyanAccent" id="host-lobby-id">---</div>
+                    <i class="fa-regular fa-copy text-2xl text-gray-500 group-hover:text-cyanAccent transition"></i>
+                </div>
+                
+                <div class="bg-white p-2 rounded-lg mb-4">
+                    <canvas id="qr-code"></canvas>
+                </div>
+                <p class="text-sm text-gray-400">Spieler können diesen Code eingeben oder den QR-Code scannen.</p>
+                <div class="w-full flex gap-2 mt-6">
+                    <button onclick="App.toggleEditor()" class="flex-1 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold transition"><i class="fa-solid fa-pen-to-square"></i> Editor</button>
+                    <button onclick="App.startHostGame()" class="flex-1 py-3 bg-green-500 hover:bg-green-600 text-white rounded-lg font-bold transition shadow-lg shadow-green-900/50"><i class="fa-solid fa-play"></i> Starten</button>
+                </div>
+            </div>
+            <div class="glass p-8 rounded-2xl flex flex-col">
+                <h2 class="text-2xl font-bold mb-4 flex justify-between">
+                    <span>Spieler</span> <span class="text-cyanAccent" id="host-player-count">0/10</span>
+                </h2>
+                <div id="host-player-list" class="flex-1 overflow-y-auto space-y-3 max-h-[400px]">
+                    <div class="text-gray-500 italic text-center mt-10">Warte auf Spieler...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Screen: Editor -->
+    <div id="screen-editor" class="hidden flex-1 flex flex-col p-6 max-w-4xl mx-auto w-full">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-3xl font-bold text-cyanAccent"><i class="fa-solid fa-image"></i> Bilder-Editor</h2>
+            <div class="space-x-3 flex">
+                <button onclick="Editor.exportJSON()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg hidden sm:block"><i class="fa-solid fa-download"></i> Export</button>
+                <button onclick="document.getElementById('import-file').click()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg hidden sm:block"><i class="fa-solid fa-upload"></i> Import</button>
+                <input type="file" id="import-file" class="hidden" accept=".json" onchange="Editor.importJSON(event)">
+                <button onclick="App.toggleEditor()" class="px-6 py-2 bg-deepPurple hover:bg-purple-600 rounded-lg font-bold">Speichern & Zurück</button>
+            </div>
+        </div>
+
+        <div class="glass p-6 rounded-2xl flex-1 overflow-y-auto">
+            <div id="editor-items" class="space-y-4"></div>
+            <button onclick="Editor.addItem()" class="mt-6 w-full py-4 border-2 border-dashed border-gray-600 text-gray-400 hover:border-cyanAccent hover:text-cyanAccent rounded-xl transition font-bold">
+                + Neues Bild hinzufügen
+            </button>
+        </div>
+    </div>
+
+    <!-- Screen: Host Dashboard -->
+    <div id="screen-host-dashboard" class="hidden flex-1 flex flex-col p-4 w-full h-screen">
+        <div class="flex justify-between items-center mb-4 bg-gray-900/60 p-3 rounded-xl border border-gray-800">
+            <h2 class="text-2xl font-bold text-cyanAccent"><i class="fa-solid fa-list"></i> Bild-Auswahl</h2>
+            <div class="space-x-2 flex items-center">
+                <button onclick="Host.openScoreEditor()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg font-bold text-sm transition-colors mr-2"><i class="fa-solid fa-sliders"></i> Punkte editieren</button>
+                <button onclick="App.endGame()" class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-bold text-sm"><i class="fa-solid fa-flag-checkered"></i> Spiel beenden</button>
+            </div>
+        </div>
+        <div id="dashboard-grid" class="flex-1 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 overflow-y-auto p-2"></div>
+        <div id="host-live-scores" class="mt-4 flex gap-4 overflow-x-auto pb-2 border-t border-gray-800 pt-4"></div>
+    </div>
+
+    <!-- Screen: Host Reveal View -->
+    <div id="screen-host-buzzer" class="hidden flex-1 flex flex-col items-center justify-center p-4">
+        <div class="glass p-6 md:p-8 rounded-3xl w-full max-w-3xl text-center relative overflow-hidden flex flex-col">
+            
+            <div class="w-full flex justify-between items-start mb-4 border-b border-gray-800 pb-4">
+                <div class="text-left flex items-center gap-4">
+                    <button onclick="Host.cancelImage()" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-white font-bold transition text-sm">
+                        <i class="fa-solid fa-arrow-left"></i> Zurück
+                    </button>
+                    <div id="host-points-display" class="text-3xl font-mono font-black text-green-400 drop-shadow-[0_0_10px_rgba(74,222,128,0.5)]">1000 Pkt</div>
+                </div>
+                
+                <button onclick="Host.startReveal()" id="btn-start-reveal" class="px-6 py-2 bg-cyanAccent hover:bg-cyan-400 rounded-lg text-darkBg font-bold transition shadow-[0_0_15px_rgba(0,229,255,0.5)] btn-press flex items-center gap-2">
+                    <i class="fa-solid fa-play"></i> Bild starten
+                </button>
+            </div>
+            
+            <div class="mb-6 w-full flex justify-center bg-black/50 p-2 rounded-xl relative min-h-[300px]">
+                <canvas id="host-active-canvas" class="max-w-full max-h-[45vh] rounded shadow-md object-contain transition-all"></canvas>
+            </div>
+
+            <h2 class="text-xl font-bold mb-4 text-gray-400">Antwort: <span id="active-q-answer" class="text-white font-black text-3xl"></span></h2>
+            
+            <div id="buzzer-status-area" class="min-h-[140px] flex flex-col items-center justify-center transition-all mt-4 border-t border-gray-800 pt-4">
+                <p class="text-xl text-gray-400 italic">Warte auf Start & Buzzer...</p>
+            </div>
+
+            <div id="buzzer-action-area" class="hidden w-full mt-4 flex flex-col gap-4 border-t border-gray-800 pt-4">
+                <div id="buzzer-winner-display"></div>
+                
+                <div class="w-full flex gap-4">
+                    <button onclick="Host.judgeAnswer(true)" class="flex-1 py-4 bg-green-500 hover:bg-green-600 rounded-xl text-white font-bold text-xl btn-press"><i class="fa-solid fa-check"></i> Richtig</button>
+                    <button onclick="Host.judgeAnswer(false)" class="flex-1 py-4 bg-red-500 hover:bg-red-600 rounded-xl text-white font-bold text-xl btn-press"><i class="fa-solid fa-xmark"></i> Falsch (-200)</button>
+                </div>
+                <button onclick="Host.resumeReveal()" class="w-full py-3 border border-gray-600 hover:bg-gray-800 rounded-xl text-gray-300 font-semibold btn-press"><i class="fa-solid fa-play"></i> Buzzer ignorieren & Fortsetzen</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Screen: Player Join -->
+    <div id="screen-player-join" class="hidden flex-1 flex items-center justify-center p-6">
+        <div class="glass p-8 rounded-2xl w-full max-w-md">
+            <button onclick="App.showRoleSelect()" class="text-gray-400 hover:text-white mb-6"><i class="fa-solid fa-arrow-left"></i> Zurück</button>
+            <h2 class="text-3xl font-bold mb-6 text-cyanAccent">Beitreten</h2>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Dein Name</label>
+                    <input type="text" id="player-name-input" maxlength="15" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-cyanAccent">
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Lobby-Code</label>
+                    <input type="text" id="player-lobby-input" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-cyanAccent uppercase font-mono tracking-widest">
+                </div>
+                <button onclick="Player.join()" id="btn-join" class="w-full mt-4 py-4 rounded-xl bg-cyanAccent hover:bg-cyan-400 text-darkBg font-bold text-lg transition-colors btn-press shadow-lg shadow-cyan-900/50">
+                    Verbinden
+                </button>
+            </div>
+            <p id="join-error" class="text-red-400 text-sm mt-4 hidden text-center"></p>
+        </div>
+    </div>
+
+    <!-- Screen: Player Waiting -->
+    <div id="screen-player-waiting" class="hidden flex-1 flex flex-col p-4 w-full h-screen">
+        <div class="flex justify-between items-center mb-4 bg-gray-800 p-3 rounded-xl border border-gray-700">
+            <div class="font-bold"><i class="fa-solid fa-user"></i> <span id="display-player-name"></span></div>
+            <div class="font-bold text-green-400"><span id="player-score-wait">0</span> Pkt</div>
+        </div>
+        
+        <div class="flex-1 flex flex-col items-center justify-center">
+            <div class="text-6xl text-cyanAccent mb-6 animate-bounce"><i class="fa-solid fa-image"></i></div>
+            <p class="text-center text-lg text-gray-300 font-semibold tracking-wide">
+                Moderator wählt das nächste Bild...
+            </p>
+        </div>
+
+        <div class="mt-4 pt-3 border-t border-gray-800">
+            <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-2 text-center">Mitspieler</div>
+            <div id="player-opponent-list" class="flex gap-2 overflow-x-auto pb-2 px-1 scroll-smooth"></div>
+        </div>
+    </div>
+
+    <!-- Screen: Player Buzzer & Canvas -->
+    <div id="screen-player-buzzer" class="hidden flex-1 flex flex-col relative w-full h-screen bg-gray-900 overflow-hidden">
+        
+        <div class="p-3 flex justify-between items-center bg-gray-800 shadow-md relative z-30">
+            <div class="font-bold"><i class="fa-solid fa-user"></i> <span id="buzzer-name"></span></div>
+            <div class="font-bold text-xl"><span id="player-score-buzz" class="text-green-400">0</span> Pkt</div>
+        </div>
+
+        <div class="p-4 text-center bg-gray-800 border-b-2 border-cyanAccent shadow-lg relative z-30 flex flex-col items-center">
+            <div class="text-2xl font-mono font-black text-green-400 mb-2 drop-shadow-[0_0_8px_rgba(74,222,128,0.5)]" id="player-live-points">1000 Pkt</div>
+            
+            <div class="w-full flex justify-center bg-black/50 p-2 rounded-xl relative min-h-[200px]">
+                <canvas id="player-active-canvas" class="max-w-full max-h-[35vh] rounded object-contain"></canvas>
+            </div>
+        </div>
+
+        <div class="flex-1 flex items-center justify-center p-6 relative z-10">
+            <button id="giant-buzzer" class="buzzer-btn w-64 h-64 md:w-80 md:h-80 rounded-full bg-red-600 shadow-[0_20px_0_#991b1b,0_0_50px_rgba(220,38,38,0.6)] active:shadow-[0_5px_0_#991b1b,0_0_20px_rgba(220,38,38,0.6)] active:translate-y-[15px] transition-all flex items-center justify-center border-8 border-red-400">
+                <span class="text-white font-extrabold text-5xl md:text-6xl tracking-wider pointer-events-none drop-shadow-md">BUZZ</span>
+            </button>
+        </div>
+
+        <div id="buzzer-overlay" class="hidden absolute inset-0 z-20 flex flex-col items-center justify-end pb-12 transition-all duration-300">
+            <div id="overlay-content-box" class="bg-gray-900/90 w-11/12 max-w-md p-6 rounded-3xl border border-gray-700 shadow-[0_10px_40px_rgba(0,0,0,0.8)] backdrop-blur-md mb-8 text-center transition-colors">
+                <i id="overlay-icon" class="fa-solid fa-lock text-6xl mb-3 drop-shadow-lg"></i>
+                <h2 id="overlay-title" class="text-3xl md:text-4xl font-black mb-2 tracking-wide uppercase drop-shadow-lg">Gesperrt</h2>
+                <p id="overlay-desc" class="text-lg font-bold drop-shadow-md text-gray-300">Ein anderer Spieler war schneller.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Screen: Podium -->
+    <div id="screen-podium" class="hidden flex-1 flex flex-col items-center justify-center p-6 relative bg-gray-900 overflow-hidden">
+        <div class="absolute inset-0 bg-gradient-to-b from-gray-900 via-gray-800 to-black z-0"></div>
+        <h1 class="text-5xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-yellow-400 to-yellow-600 mb-10 drop-shadow-[0_5px_5px_rgba(0,0,0,0.8)] z-10 tracking-widest uppercase text-center mt-8">Siegerehrung</h1>
+        <div id="podium-container" class="flex flex-wrap items-end justify-center gap-2 md:gap-6 min-h-[350px] md:min-h-[450px] w-full max-w-6xl z-10"></div>
+        <button onclick="location.reload()" class="mt-12 mb-6 px-8 py-4 bg-gradient-to-r from-gray-800 to-gray-700 hover:from-gray-700 hover:to-gray-600 rounded-xl font-bold text-white text-lg transition-all shadow-xl z-10 border border-gray-600 hover:scale-105"><i class="fa-solid fa-rotate-right mr-2"></i> Neues Spiel</button>
+    </div>
+
+    <!-- Screen: Score Editor -->
+    <div id="screen-score-editor" class="hidden fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4 backdrop-blur-sm transition-all">
+        <div class="glass p-8 rounded-2xl w-full max-w-2xl shadow-2xl relative flex flex-col max-h-[90vh]">
+            <h2 class="text-3xl font-bold mb-6 text-cyanAccent"><i class="fa-solid fa-sliders"></i> Lobby Verwalten</h2>
+            <div id="score-editor-list" class="flex-1 overflow-y-auto space-y-3 pr-2 mb-6"></div>
+            <div class="mt-auto pt-4 border-t border-gray-700">
+                <button onclick="document.getElementById('screen-score-editor').classList.add('hidden')" class="w-full py-4 bg-deepPurple hover:bg-purple-600 rounded-xl font-bold text-white text-lg transition-colors btn-press shadow-lg">Fertig</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const PLAYER_COLORS = ['#EF4444', '#3B82F6', '#10B981', '#F59E0B', '#EC4899', '#8B5CF6', '#06B6D4', '#F97316', '#14B8A6', '#84CC16'];
+
+        const Sound = {
+            ctx: new (window.AudioContext || window.webkitAudioContext)(),
+            playTone(freq, type, duration, vol=0.1) {
+                if(this.ctx.state === 'suspended') this.ctx.resume();
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + duration);
+            },
+            buzz() { this.playTone(150, 'sawtooth', 0.5, 0.2); },
+            correct() { this.playTone(600, 'sine', 0.1, 0.1); setTimeout(() => this.playTone(800, 'sine', 0.3, 0.1), 100); },
+            wrong() { this.playTone(100, 'square', 0.4, 0.2); },
+            win() { [300, 400, 500, 600, 800].forEach((f, i) => { setTimeout(() => this.playTone(f, 'sine', 0.2, 0.1), i * 150); }); }
+        };
+
+        const AppState = {
+            peer: null, isHost: false, gameStarted: false, lobbyId: null, inviteLink: null,
+            connections: {}, players: [], currentImageObj: null, currentImageIndex: -1,
+            buzzerLocked: true, myId: null, myName: '', myColor: '#ffffff', hostConn: null,
+            myScore: 0, pingInterval: null, 
+            revealTimer: null, currentBlockSize: 50, currentPoints: 1000, currentBuzzer: null
+        };
+
+        const Storage = {
+            getKey: () => 'pixel_quiz_data',
+            getFallbackData() {
+                return [
+                    { answer: "Mona Lisa", image: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg/400px-Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg", used: false },
+                    { answer: "Eiffelturm", image: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/85/Tour_Eiffel_Wikimedia_Commons.jpg/400px-Tour_Eiffel_Wikimedia_Commons.jpg", used: false }
+                ];
+            },
+            load() {
+                try {
+                    const data = localStorage.getItem(this.getKey());
+                    if (data) {
+                        const parsed = JSON.parse(data);
+                        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+                    }
+                } catch(e) { console.error("Fehler beim Laden", e); }
+                const fallback = this.getFallbackData();
+                localStorage.setItem(this.getKey(), JSON.stringify(fallback));
+                return fallback;
+            },
+            save(data) { localStorage.setItem(this.getKey(), JSON.stringify(data)); }
+        };
+
+        const Pixelator = {
+            cache: {},
+            preload(url, callback) {
+                if(this.cache[url]) { callback(this.cache[url]); return; }
+                const img = new Image();
+                img.onload = () => { this.cache[url] = img; callback(img); };
+                img.onerror = () => { console.warn("Bild konnte nicht geladen werden:", url); };
+                img.src = url;
+            },
+            draw(canvasId, url, blockSize) {
+                const canvas = document.getElementById(canvasId);
+                if(!canvas) return;
+                const ctx = canvas.getContext('2d');
+
+                if (canvas.dataset.currentUrl !== url) {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    canvas.dataset.currentUrl = url;
+                }
+
+                this.preload(url, (img) => {
+                    const maxW = canvas.parentElement.clientWidth;
+                    const maxH = window.innerHeight * 0.45;
+                    const ratio = Math.min(maxW/img.width, maxH/img.height);
+                    const w = img.width * ratio;
+                    const h = img.height * ratio;
+                    
+                    canvas.width = w;
+                    canvas.height = h;
+
+                    if (blockSize <= 1) {
+                        ctx.imageSmoothingEnabled = true;
+                        ctx.drawImage(img, 0, 0, w, h);
+                        return;
+                    }
+
+                    const fw = Math.max(1, Math.floor(w / blockSize));
+                    const fh = Math.max(1, Math.floor(h / blockSize));
+                    
+                    const offscreen = document.createElement('canvas');
+                    offscreen.width = fw;
+                    offscreen.height = fh;
+                    const octx = offscreen.getContext('2d');
+                    octx.drawImage(img, 0, 0, fw, fh);
+
+                    ctx.imageSmoothingEnabled = false;
+                    ctx.drawImage(offscreen, 0, 0, fw, fh, 0, 0, w, h);
+                });
+            }
+        };
+
+        const UI = {
+            screens: ['screen-role', 'screen-host-lobby', 'screen-editor', 'screen-host-dashboard', 'screen-host-buzzer', 'screen-player-join', 'screen-player-waiting', 'screen-player-buzzer', 'screen-podium'],
+            show(screenId) {
+                this.screens.forEach(s => document.getElementById(s).classList.add('hidden'));
+                document.getElementById(screenId).classList.remove('hidden');
+            }
+        };
+
+        const Editor = {
+            render() {
+                const container = document.getElementById('editor-items');
+                const data = Storage.load();
+                container.innerHTML = '';
+
+                const escapeHtml = (str) => {
+                    if (!str) return '';
+                    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+                };
+
+                data.forEach((item, idx) => {
+                    container.innerHTML += `
+                        <div class="bg-gray-900/60 p-4 rounded-xl border border-gray-700/50 relative">
+                            <button onclick="Editor.deleteItem(${idx})" class="absolute top-4 right-4 text-red-500 hover:text-red-400 p-2"><i class="fa-solid fa-trash"></i></button>
+                            <div class="mb-3 pr-10">
+                                <label class="block text-xs text-cyanAccent font-bold mb-1">Antwort / Lösung</label>
+                                <input type="text" value="${escapeHtml(item.answer)}" oninput="Editor.updateItem(${idx}, 'answer', this.value)" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white font-bold focus:outline-none focus:border-cyanAccent">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-pink-400 font-bold mb-1">Bild-URL (WICHTIG: Direktlinks nutzen)</label>
+                                <input type="text" value="${escapeHtml(item.image)}" oninput="Editor.updateItem(${idx}, 'image', this.value)" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-pink-400">
+                            </div>
+                        </div>
+                    `;
+                });
+            },
+            addItem() {
+                const data = Storage.load();
+                data.push({ answer: "Neue Antwort", image: "", used: false });
+                Storage.save(data);
+                this.render();
+            },
+            deleteItem(idx) {
+                if(!confirm("Bild wirklich löschen?")) return;
+                const data = Storage.load();
+                data.splice(idx, 1);
+                Storage.save(data);
+                this.render();
+            },
+            updateItem(idx, field, val) {
+                const data = Storage.load();
+                data[idx][field] = val.trim();
+                Storage.save(data);
+            },
+            exportJSON() {
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(Storage.load(), null, 2));
+                const anchor = document.createElement('a');
+                anchor.setAttribute("href", dataStr);
+                anchor.setAttribute("download", "pixel_quiz.json");
+                document.body.appendChild(anchor);
+                anchor.click();
+                anchor.remove();
+            },
+            importJSON(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const parsed = JSON.parse(e.target.result);
+                        if (Array.isArray(parsed) && parsed[0].answer !== undefined) { 
+                            Storage.save(parsed); this.render(); alert("✅ Import erfolgreich!"); 
+                        } else { alert("❌ Ungültiges Format!"); }
+                    } catch(err) { alert("❌ Fehler beim Lesen!"); }
+                    event.target.value = '';
+                };
+                reader.readAsText(file);
+            }
+        };
+
+        const App = {
+            init() {
+                const urlParams = new URLSearchParams(window.location.search);
+                const code = urlParams.get('code') || urlParams.get('lobby');
+                if(code) {
+                    document.getElementById('player-lobby-input').value = code;
+                    App.showPlayerJoin();
+                    setTimeout(() => {
+                        const name = prompt("Du wurdest eingeladen! Bitte gib deinen Spielernamen ein:");
+                        if(name && name.trim() !== "") {
+                            document.getElementById('player-name-input').value = name.trim();
+                            Player.join();
+                        } else { document.getElementById('player-name-input').focus(); }
+                    }, 300);
+                } else { UI.show('screen-role'); }
+            },
+            showRoleSelect() { UI.show('screen-role'); },
+            showPlayerJoin() { UI.show('screen-player-join'); },
+            generateId() { return Math.random().toString(36).substring(2, 7).toUpperCase(); },
+
+            initHost() {
+                AppState.isHost = true;
+                AppState.lobbyId = App.generateId();
+                UI.show('screen-host-lobby');
+                document.getElementById('host-lobby-id').innerText = AppState.lobbyId;
+                
+                const joinUrl = `https://scheilutz-star.github.io/gamehub/?code=${AppState.lobbyId}`;
+                AppState.inviteLink = joinUrl; 
+                new QRious({ element: document.getElementById('qr-code'), value: joinUrl, size: 150, backgroundAlpha: 0, foreground: '#00E5FF' });
+
+                AppState.peer = new Peer(AppState.lobbyId);
+                AppState.peer.on('connection', conn => Host.handleConnection(conn));
+            },
+
+            toggleEditor() {
+                const scr = document.getElementById('screen-editor');
+                if(scr.classList.contains('hidden')) {
+                    Editor.render(); UI.show('screen-editor');
+                } else {
+                    if(AppState.gameStarted) { Host.renderDashboard(); UI.show('screen-host-dashboard'); }
+                    else { UI.show('screen-host-lobby'); }
+                }
+            },
+
+            startHostGame() {
+                if(Object.keys(AppState.connections).length === 0 && !confirm("Keine Spieler da. Trotzdem starten?")) return;
+                AppState.gameStarted = true;
+                const data = Storage.load();
+                data.forEach(d => d.used = false);
+                Storage.save(data);
+
+                Host.renderDashboard();
+                Host.renderLiveScores();
+                UI.show('screen-host-dashboard');
+                Host.broadcast({ type: 'game_started' });
+            },
+
+            endGame() {
+                if(!confirm("Möchtest du das Spiel wirklich vorzeitig beenden und zur Siegerehrung wechseln?")) return;
+                if(AppState.revealTimer) clearInterval(AppState.revealTimer);
+                
+                const scores = Object.values(AppState.connections).map(p => ({ name: p.name, score: p.score, color: p.color }));
+                scores.push({ name: AppState.myName || 'Host', score: 0, color: '#00E5FF' }); // falls Host auch gewertet werden soll, sonst nur Spieler
+                
+                Host.broadcast({ type: 'game_over', scores: Object.values(AppState.connections).map(p => ({ name: p.name, score: p.score, color: p.color })) });
+                
+                // Host-Ansicht direkt zur Siegerehrung bringen
+                UI.show('screen-podium');
+                Player.handleHostData({ type: 'game_over', scores: Object.values(AppState.connections).map(p => ({ name: p.name, score: p.score, color: p.color })) });
+            }
+        };
+
+        const Host = {
+            showCopyMenu() {
+                document.getElementById('copy-modal').classList.remove('hidden');
+                document.getElementById('copy-feedback').classList.add('hidden');
+            },
+            copyToClipboard(type) {
+                const txt = type === 'code' ? AppState.lobbyId : AppState.inviteLink;
+                navigator.clipboard.writeText(txt).then(() => {
+                    const fb = document.getElementById('copy-feedback');
+                    fb.innerHTML = type === 'code' ? '<i class="fa-solid fa-check"></i> Code kopiert!' : '<i class="fa-solid fa-check"></i> Link kopiert!';
+                    fb.classList.remove('hidden');
+                    setTimeout(() => document.getElementById('copy-modal').classList.add('hidden'), 1500);
+                });
+            },
+
+            handleConnection(conn) {
+                conn.on('data', data => {
+                    if(data.type === 'join') {
+                        const used = Object.values(AppState.connections).map(p => p.color);
+                        const assigned = PLAYER_COLORS.find(c => !used.includes(c)) || PLAYER_COLORS[Object.keys(AppState.connections).length % PLAYER_COLORS.length];
+                        AppState.connections[conn.peer] = { conn, name: data.name, score: 0, ping: 0, color: assigned };
+                        Host.updatePlayerList();
+                        conn.send({ type: 'welcome', score: 0, color: assigned });
+                        if (AppState.gameStarted) conn.send({ type: 'game_started' });
+                        if (AppState.currentImageObj && !AppState.buzzerLocked) {
+                            conn.send({ type: 'sync_reveal', url: AppState.currentImageObj.image, blockSize: AppState.currentBlockSize, pts: AppState.currentPoints });
+                        }
+                    }
+                    else if(data.type === 'ping') { conn.send({ type: 'pong', time: data.time }); }
+                    else if(data.type === 'buzz') { Host.handleBuzz(conn.peer, data.name); }
+                });
+                conn.on('close', () => Host.removePlayer(conn.peer));
+            },
+
+            updatePlayerList() {
+                const players = Object.values(AppState.connections);
+                const count = document.getElementById('host-player-count');
+                if(count) count.innerText = `${players.length}/10`;
+                
+                const list = document.getElementById('host-player-list');
+                if(list) {
+                    list.innerHTML = players.length === 0 ? '<div class="text-gray-500 italic mt-10">Warte auf Spieler...</div>' : '';
+                    players.forEach(p => {
+                        list.innerHTML += `<div class="bg-gray-800 p-3 rounded-lg flex justify-between border-l-4" style="border-color: ${p.color}">
+                            <span class="font-bold" style="color: ${p.color}">${p.name}</span>
+                            <button onclick="Host.kickPlayer('${p.conn.peer}')" class="text-gray-500 hover:text-red-500 transition"><i class="fa-solid fa-door-open"></i></button>
+                        </div>`;
+                    });
+                }
+                Host.renderLiveScores();
+                Host.broadcast({ type: 'sync_players', players: players.map(p => ({ name: p.name, score: p.score, color: p.color })) });
+            },
+
+            kickPlayer(peerId) {
+                if(confirm("Möchtest du diesen Spieler wirklich entfernen?")) {
+                    if(AppState.connections[peerId]) {
+                        AppState.connections[peerId].conn.send({ type: 'kicked' });
+                        setTimeout(() => {
+                            Host.removePlayer(peerId);
+                            if (!document.getElementById('screen-score-editor').classList.contains('hidden')) {
+                                Host.openScoreEditor();
+                            }
+                        }, 500);
+                    }
+                }
+            },
+            
+            removePlayer(peerId) {
+                if(AppState.connections[peerId]) {
+                    AppState.connections[peerId].conn.close();
+                    delete AppState.connections[peerId];
+                    Host.updatePlayerList();
+                    
+                    if (AppState.currentBuzzer === peerId && !document.getElementById('buzzer-action-area').classList.contains('hidden')) {
+                        Host.resumeReveal();
+                    }
+                }
+            },
+            
+            broadcast(data) { Object.values(AppState.connections).forEach(c => { if(c.conn && c.conn.open) c.conn.send(data); }); },
+
+            renderDashboard() {
+                const grid = document.getElementById('dashboard-grid');
+                const data = Storage.load();
+                grid.innerHTML = '';
+                
+                data.forEach((item, idx) => {
+                    const status = item.used ? 'opacity-50 border-green-600 bg-green-900/20' : 'border-gray-700 bg-gray-800 hover:border-cyanAccent cursor-pointer hover:-translate-y-1';
+                    const icon = item.used ? '<i class="fa-solid fa-check text-green-500"></i>' : '<i class="fa-solid fa-image text-cyanAccent"></i>';
+                    grid.innerHTML += `
+                        <div onclick="Host.openImage(${idx})" class="p-4 rounded-xl border-2 transition-all ${status} flex flex-col items-center text-center">
+                            <div class="text-3xl mb-2">${icon}</div>
+                            <h3 class="font-bold text-white text-lg truncate w-full">${item.answer}</h3>
+                            <span class="text-xs text-gray-500 mt-2">Bild ${idx + 1}</span>
+                        </div>
+                    `;
+                });
+            },
+
+            openScoreEditor() {
+                const list = document.getElementById('score-editor-list');
+                list.innerHTML = '';
+                const players = Object.keys(AppState.connections);
+                if(players.length === 0) list.innerHTML = '<div class="text-gray-500 text-center py-4">Keine Spieler.</div>';
+                
+                players.forEach(pId => {
+                    const p = AppState.connections[pId];
+                    list.innerHTML += `
+                        <div class="flex flex-col sm:flex-row justify-between items-center bg-gray-900/60 p-4 rounded-xl border border-gray-700 gap-3">
+                            <span class="font-bold text-lg truncate w-full sm:w-auto" style="color: ${p.color}">${p.name}</span>
+                            <div class="flex items-center gap-2 justify-end w-full sm:w-auto">
+                                <button onclick="Host.adjustScore('${pId}', -100)" class="w-8 h-8 bg-red-600 rounded-full font-black text-white hover:bg-red-500 transition">-</button>
+                                <input type="number" id="edit-score-${pId}" value="${p.score}" onchange="Host.setScore('${pId}', this.value)" class="w-20 bg-gray-800 border border-gray-600 rounded text-center py-1 text-white font-mono focus:outline-none">
+                                <button onclick="Host.adjustScore('${pId}', 100)" class="w-8 h-8 bg-green-600 rounded-full font-black text-white hover:bg-green-500 transition">+</button>
+                                <button onclick="Host.kickPlayer('${pId}')" title="Spieler kicken" class="ml-2 w-9 h-9 bg-gray-800 hover:bg-red-600 border border-gray-600 hover:border-red-500 rounded-lg text-gray-400 hover:text-white transition flex items-center justify-center">
+                                    <i class="fa-solid fa-door-open"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                });
+                document.getElementById('screen-score-editor').classList.remove('hidden');
+            },
+            
+            adjustScore(pId, amount) {
+                if(AppState.connections[pId]) {
+                    AppState.connections[pId].score += amount;
+                    document.getElementById(`edit-score-${pId}`).value = AppState.connections[pId].score;
+                    Host.updatePlayerScores();
+                }
+            },
+            setScore(pId, value) {
+                if(AppState.connections[pId]) {
+                    AppState.connections[pId].score = parseInt(value) || 0;
+                    Host.updatePlayerScores();
+                }
+            },
+            updatePlayerScores() {
+                Object.keys(AppState.connections).forEach(k => AppState.connections[k].conn.send({ type: 'score_update', score: AppState.connections[k].score }));
+                Host.renderLiveScores();
+                Host.broadcast({ type: 'sync_players', players: Object.values(AppState.connections).map(p => ({ name: p.name, score: p.score, color: p.color })) });
+            },
+            renderLiveScores() {
+                const container = document.getElementById('host-live-scores');
+                if(!container) return;
+                container.innerHTML = '';
+                Object.values(AppState.connections).sort((a,b)=>b.score-a.score).forEach(p => {
+                    container.innerHTML += `<div class="bg-gray-800 px-4 py-2 rounded-full flex gap-3 items-center border shadow-md" style="border-color: ${p.color}"><span class="font-bold" style="color: ${p.color}">${p.name}</span> <span class="text-green-400 font-mono font-bold">${p.score}</span></div>`;
+                });
+            },
+
+            openImage(idx) {
+                const data = Storage.load();
+                AppState.currentImageIndex = idx;
+                AppState.currentImageObj = data[idx];
+                AppState.buzzerLocked = true;
+                
+                document.getElementById('active-q-answer').innerText = AppState.currentImageObj.answer;
+                document.getElementById('host-points-display').innerText = "1000 Pkt";
+                document.getElementById('btn-start-reveal').classList.remove('hidden');
+                
+                document.getElementById('buzzer-status-area').classList.remove('hidden');
+                document.getElementById('buzzer-status-area').innerHTML = `<p class="text-xl text-gray-400 italic">Warte auf Start...</p>`;
+                document.getElementById('buzzer-action-area').classList.add('hidden');
+
+                UI.show('screen-host-buzzer');
+                
+                AppState.currentBlockSize = 50;
+                AppState.currentPoints = 1000;
+                Pixelator.draw('host-active-canvas', AppState.currentImageObj.image, AppState.currentBlockSize);
+                
+                Host.broadcast({ type: 'image_view_ready' });
+            },
+
+            cancelImage() {
+                if(AppState.revealTimer) clearInterval(AppState.revealTimer);
+                
+                const canvas = document.getElementById('host-active-canvas');
+                if (canvas) {
+                    const ctx = canvas.getContext('2d');
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    canvas.dataset.currentUrl = "";
+                }
+
+                Host.broadcast({ type: 'game_started' }); 
+                Host.renderDashboard();
+                UI.show('screen-host-dashboard');
+            },
+
+            startReveal() {
+                document.getElementById('btn-start-reveal').classList.add('hidden');
+                document.getElementById('buzzer-status-area').innerHTML = `
+                    <div class="text-4xl animate-pulse mb-2 text-cyanAccent"><i class="fa-solid fa-bolt"></i></div>
+                    <p class="text-lg text-cyanAccent font-bold">Buzzer aktiv! Bild wird schärfer...</p>
+                `;
+                
+                AppState.buzzerLocked = false;
+                Host.broadcast({ type: 'sync_reveal', url: AppState.currentImageObj.image, blockSize: AppState.currentBlockSize, pts: AppState.currentPoints });
+                
+                if(AppState.revealTimer) clearInterval(AppState.revealTimer);
+                
+                AppState.revealTimer = setInterval(() => {
+                    AppState.currentBlockSize = Math.max(1, AppState.currentBlockSize - 0.8);
+                    AppState.currentPoints = Math.max(100, AppState.currentPoints - 15);
+                    
+                    document.getElementById('host-points-display').innerText = `${Math.floor(AppState.currentPoints)} Pkt`;
+                    Pixelator.draw('host-active-canvas', AppState.currentImageObj.image, AppState.currentBlockSize);
+                    
+                    Host.broadcast({ type: 'sync_reveal', url: AppState.currentImageObj.image, blockSize: AppState.currentBlockSize, pts: AppState.currentPoints });
+                    
+                    if(AppState.currentBlockSize <= 1) {
+                        clearInterval(AppState.revealTimer);
+                    }
+                }, 500);
+            },
+
+            handleBuzz(peerId, name) {
+                if(AppState.buzzerLocked) return;
+                AppState.buzzerLocked = true;
+                if(AppState.revealTimer) clearInterval(AppState.revealTimer);
+                
+                Sound.buzz();
+                const winnerColor = AppState.connections[peerId]?.color || '#00E5FF';
+                Host.broadcast({ type: 'buzzer_locked', winner: name, color: winnerColor });
+                
+                document.getElementById('buzzer-status-area').classList.add('hidden');
+                document.getElementById('buzzer-action-area').classList.remove('hidden');
+                
+                const display = document.getElementById('buzzer-winner-display');
+                display.innerHTML = `<h3 class="text-3xl font-extrabold mb-4 animate-bounce" style="color: ${winnerColor}">🥇 ${name} buzzert!</h3>`;
+                
+                AppState.currentBuzzer = peerId;
+            },
+
+            judgeAnswer(isCorrect) {
+                const pId = AppState.currentBuzzer;
+                const earnedPts = Math.floor(AppState.currentPoints);
+                
+                if(isCorrect) {
+                    Sound.correct();
+                    if(AppState.connections[pId]) AppState.connections[pId].score += earnedPts;
+                    Host.updatePlayerScores();
+                    
+                    document.getElementById('buzzer-action-area').classList.add('hidden');
+                    const statusArea = document.getElementById('buzzer-status-area');
+                    statusArea.classList.remove('hidden');
+                    statusArea.innerHTML = `<h3 class="text-3xl font-extrabold text-green-400 mb-2">Richtig!</h3><p>Punkte wurden verteilt. Zurück zur Lobby...</p>`;
+
+                    Pixelator.draw('host-active-canvas', AppState.currentImageObj.image, 1);
+                    Host.broadcast({ type: 'sync_reveal', url: AppState.currentImageObj.image, blockSize: 1, pts: earnedPts, forceShow: true });
+                    
+                    const data = Storage.load();
+                    data[AppState.currentImageIndex].used = true;
+                    Storage.save(data);
+                    
+                    setTimeout(() => { Host.cancelImage(); }, 4000); 
+                } else {
+                    Sound.wrong();
+                    if(AppState.connections[pId]) AppState.connections[pId].score -= 200; 
+                    Host.updatePlayerScores();
+                    Host.resumeReveal(); 
+                }
+            },
+
+            resumeReveal() {
+                AppState.buzzerLocked = false;
+                document.getElementById('buzzer-action-area').classList.add('hidden');
+                document.getElementById('buzzer-status-area').classList.remove('hidden');
+                document.getElementById('buzzer-status-area').innerHTML = `
+                    <div class="text-4xl animate-pulse mb-2 text-cyanAccent"><i class="fa-solid fa-bolt"></i></div>
+                    <p class="text-lg text-cyanAccent font-bold">Buzzer aktiv! Bild wird schärfer...</p>
+                `;
+                Host.broadcast({ type: 'resume_reveal' });
+                Sound.correct(); 
+                
+                AppState.revealTimer = setInterval(() => {
+                    AppState.currentBlockSize = Math.max(1, AppState.currentBlockSize - 0.8);
+                    AppState.currentPoints = Math.max(100, AppState.currentPoints - 15);
+                    
+                    document.getElementById('host-points-display').innerText = `${Math.floor(AppState.currentPoints)} Pkt`;
+                    Pixelator.draw('host-active-canvas', AppState.currentImageObj.image, AppState.currentBlockSize);
+                    
+                    Host.broadcast({ type: 'sync_reveal', url: AppState.currentImageObj.image, blockSize: AppState.currentBlockSize, pts: AppState.currentPoints });
+                    
+                    if(AppState.currentBlockSize <= 1) clearInterval(AppState.revealTimer);
+                }, 500);
+            }
+        };
+
+        const Player = {
+            join() {
+                const name = document.getElementById('player-name-input').value.trim();
+                const lobby = document.getElementById('player-lobby-input').value.trim().toUpperCase();
+                const errBox = document.getElementById('join-error');
+                
+                if(!name || !lobby) { errBox.innerText = "Bitte Name und Code eingeben."; errBox.classList.remove('hidden'); return; }
+                
+                const btn = document.getElementById('btn-join');
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Verbinde...';
+                btn.disabled = true;
+
+                AppState.myName = name;
+                AppState.peer = new Peer();
+                
+                AppState.peer.on('open', id => {
+                    AppState.myId = id;
+                    const conn = AppState.peer.connect(lobby);
+                    
+                    conn.on('open', () => {
+                        AppState.hostConn = conn;
+                        conn.send({ type: 'join', name });
+                        AppState.pingInterval = setInterval(() => { conn.send({ type: 'ping', time: Date.now() }); }, 2000);
+                    });
+
+                    conn.on('data', data => Player.handleHostData(data));
+                    conn.on('close', () => { alert('Verbindung verloren.'); location.reload(); });
+                    AppState.peer.on('error', err => {
+                        errBox.innerText = "Lobby nicht gefunden!";
+                        errBox.classList.remove('hidden');
+                        btn.innerHTML = 'Verbinden'; btn.disabled = false;
+                    });
+                });
+            },
+
+            handleHostData(data) {
+                if(data.type === 'kicked') {
+                    alert("Du wurdest vom Moderator aus dem Spiel entfernt.");
+                    window.location.href = window.location.pathname;
+                    return;
+                }
+                if(data.type === 'welcome') {
+                    AppState.myColor = data.color;
+                    UI.show('screen-player-waiting');
+                    document.getElementById('display-player-name').innerText = AppState.myName;
+                    document.getElementById('display-player-name').style.color = data.color;
+                    document.getElementById('buzzer-name').innerText = AppState.myName;
+                    document.getElementById('buzzer-name').style.color = data.color;
+                    document.getElementById('giant-buzzer').style.borderColor = data.color;
+                    Player.updateScore(data.score);
+                }
+                else if(data.type === 'sync_players') { Player.renderPlayerList(data.players); }
+                else if(data.type === 'score_update') { Player.updateScore(data.score); }
+                else if(data.type === 'game_started' || data.type === 'image_view_ready') {
+                    UI.show('screen-player-waiting');
+                    
+                    const canvas = document.getElementById('player-active-canvas');
+                    if (canvas) {
+                        const ctx = canvas.getContext('2d');
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        canvas.dataset.currentUrl = "";
+                    }
+                }
+                else if(data.type === 'sync_reveal') {
+                    UI.show('screen-player-buzzer');
+                    document.getElementById('buzzer-overlay').classList.add('hidden');
+                    document.getElementById('player-live-points').innerText = `${Math.floor(data.pts)} Pkt`;
+                    Pixelator.draw('player-active-canvas', data.url, data.blockSize);
+                    if(data.forceShow) {
+                        Player.setBuzzerOverlay('Aufgelöst', 'Bild ist komplett sichtbar.', 'fa-eye', true, '#10B981');
+                    }
+                }
+                else if(data.type === 'resume_reveal') {
+                    document.getElementById('buzzer-overlay').classList.add('hidden');
+                    if(navigator.vibrate) navigator.vibrate(50);
+                }
+                else if(data.type === 'buzzer_locked') {
+                    if(data.winner === AppState.myName) {
+                        Player.setBuzzerOverlay('DU BIST DRAN!', 'Gib deine Antwort laut ab!', 'fa-microphone', true, data.color);
+                    } else {
+                        Player.setBuzzerOverlay(`${data.winner}`, `Darf antworten!`, 'fa-bolt', true, data.color);
+                    }
+                }
+                else if(data.type === 'game_over') {
+                    UI.show('screen-podium');
+                    const sortedScores = data.scores.sort((a,b) => b.score - a.score);
+                    let currentRank = 1;
+                    for (let i = 0; i < sortedScores.length; i++) {
+                        if (i > 0 && sortedScores[i].score < sortedScores[i - 1].score) currentRank = i + 1;
+                        sortedScores[i].rank = currentRank;
+                    }
+
+                    Sound.win();
+                    var duration = 3 * 1000;
+                    var end = Date.now() + duration;
+                    (function frame() {
+                        confetti({ particleCount: 5, angle: 60, spread: 55, origin: { x: 0 }, colors: ['#00E5FF', '#7C3AED', '#F59E0B'] });
+                        confetti({ particleCount: 5, angle: 120, spread: 55, origin: { x: 1 }, colors: ['#00E5FF', '#7C3AED', '#F59E0B'] });
+                        if (Date.now() < end) requestAnimationFrame(frame);
+                    }());
+
+                    const container = document.getElementById('podium-container');
+                    container.innerHTML = '';
+                    if(sortedScores.length === 0) return;
+
+                    const rankStyles = {
+                        1: { height: 'h-56 md:h-64', color: 'bg-gradient-to-t from-yellow-600 to-yellow-400', border: 'border-yellow-300', text: 'text-yellow-100', shadow: 'shadow-[0_0_20px_rgba(250,204,21,0.5)]' },
+                        2: { height: 'h-40 md:h-48', color: 'bg-gradient-to-t from-gray-700 to-gray-400', border: 'border-gray-300', text: 'text-gray-100', shadow: 'shadow-[0_0_15px_rgba(156,163,175,0.3)]' },
+                        3: { height: 'h-28 md:h-36', color: 'bg-gradient-to-t from-amber-900 to-amber-600', border: 'border-amber-500', text: 'text-amber-100', shadow: 'shadow-[0_0_10px_rgba(217,119,6,0.3)]' }
+                    };
+
+                    const groups = { 1: [], 2: [], 3: [] };
+                    sortedScores.forEach(p => { if (p.rank <= 3) groups[p.rank].push(p); });
+
+                    const drawGroup = (rankLevel) => {
+                        const playersInRank = groups[rankLevel];
+                        if (!playersInRank || playersInRank.length === 0) return `<div class="w-24 md:w-40"></div>`;
+                        
+                        const style = rankStyles[rankLevel];
+                        let html = `<div class="flex flex-col items-center justify-end z-10 relative">`;
+                        html += `<div class="flex flex-wrap justify-center gap-2 mb-2 w-full z-20 px-2 max-w-[300px]">`;
+                        playersInRank.forEach(player => {
+                            const isWinner = rankLevel === 1;
+                            const crown = isWinner ? '<i class="fa-solid fa-crown text-yellow-400 text-2xl md:text-3xl mb-1 drop-shadow-md animate-bounce w-full text-center"></i>' : '';
+                            html += `
+                                <div class="flex flex-col items-center text-center">
+                                    ${crown}
+                                    <div class="bg-gray-900/80 backdrop-blur-md border border-gray-700 rounded-lg px-2 py-1 shadow-lg" style="border-bottom: 3px solid ${player.color || '#fff'}">
+                                        <span class="block font-black text-xs break-words" style="color: ${player.color || '#fff'}">${player.name}</span>
+                                        <span class="text-green-400 text-[10px] font-mono font-bold block mt-1">${player.score} Pkt</span>
+                                    </div>
+                                </div>`;
+                        });
+                        html += `</div>`;
+                        const blockWidth = playersInRank.length > 1 ? 'w-40 md:w-64' : 'w-24 md:w-40';
+                        html += `<div class="${blockWidth} ${style.height} ${style.color} ${style.shadow} rounded-t-2xl border-t-4 ${style.border} flex justify-center pt-4 relative"><span class="${style.text} font-black text-4xl md:text-6xl drop-shadow-lg z-10">${rankLevel}</span></div></div>`;
+                        return html;
+                    };
+
+                    container.innerHTML = drawGroup(2) + drawGroup(1) + drawGroup(3);
+                }
+            },
+
+            updateScore(sc) {
+                AppState.myScore = sc;
+                document.getElementById('player-score-wait').innerText = sc;
+                document.getElementById('player-score-buzz').innerText = sc;
+            },
+
+            renderPlayerList(players) {
+                const container = document.getElementById('player-opponent-list');
+                if(!container) return;
+                container.innerHTML = '';
+                [...players].sort((a,b) => b.score - a.score).forEach(p => {
+                    const isMe = p.name === AppState.myName;
+                    const borderThickness = isMe ? 'border-2' : 'border';
+                    container.innerHTML += `<div class="bg-gray-800/80 px-4 py-2 rounded-full ${borderThickness} flex gap-2 items-center flex-shrink-0" style="border-color: ${p.color}"><span class="font-bold text-sm" style="color: ${p.color}">${p.name} ${isMe ? '(Du)' : ''}</span><span class="text-green-400 font-mono text-sm">${p.score}</span></div>`;
+                });
+            },
+
+            setBuzzerOverlay(title, desc, icon, show, color = null) {
+                const overlay = document.getElementById('buzzer-overlay');
+                const titleEl = document.getElementById('overlay-title');
+                const descEl = document.getElementById('overlay-desc');
+                const iconEl = document.getElementById('overlay-icon');
+                const boxEl = document.getElementById('overlay-content-box');
+                
+                titleEl.innerText = title;
+                descEl.innerText = desc;
+                iconEl.className = `fa-solid ${icon} text-6xl mb-3 drop-shadow-lg`;
+                
+                if (color) {
+                    overlay.style.backgroundColor = color + 'CC'; 
+                    boxEl.style.borderColor = color;
+                    boxEl.style.boxShadow = `0 10px 40px ${color}80`;
+                    titleEl.style.color = '#ffffff'; descEl.style.color = '#ffffff'; iconEl.style.color = '#ffffff';
+                } else {
+                    overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.85)';
+                    boxEl.style.borderColor = '#374151';
+                    boxEl.style.boxShadow = '0 10px 40px rgba(0,0,0,0.8)';
+                    titleEl.style.color = '#ffffff'; descEl.style.color = '#9ca3af'; iconEl.style.color = '#9ca3af';
+                }
+                
+                if(show) overlay.classList.remove('hidden'); else overlay.classList.add('hidden');
+            },
+
+            hitBuzzer() {
+                if(!AppState.hostConn) return;
+                Sound.ctx.resume();
+                AppState.hostConn.send({ type: 'buzz', name: AppState.myName });
+                Player.setBuzzerOverlay('Gesendet', 'Signal wird übertragen...', 'fa-paper-plane', true);
+            }
+        };
+
+        const btnBuzzer = document.getElementById('giant-buzzer');
+        btnBuzzer.addEventListener('touchstart', (e) => { e.preventDefault(); Player.hitBuzzer(); }, {passive: false});
+        btnBuzzer.addEventListener('mousedown', (e) => { e.preventDefault(); Player.hitBuzzer(); });
+
+        window.onload = () => App.init();
+    </script>
+</body>
+</html>
