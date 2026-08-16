@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GameHub — Spiele</title>
-<link rel="icon" type="image/png" sizes="40x40" href="favicon.png">
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
@@ -16,6 +15,7 @@
     --teal: #2DD4BF;
     --pink: #FF3D81;
     --violet: #8B5CF6;
+    --pixel: #4ADE80;
     --ink: #F4F2EB;
     --muted: #9498C9;
   }
@@ -76,6 +76,10 @@
   .glow-violet:hover, .glow-violet:focus-within{
     box-shadow: 0 25px 60px -15px rgba(139,92,246,0.45), 0 0 0 1px rgba(139,92,246,0.5) inset;
     border-color: rgba(139,92,246,0.7) !important;
+  }
+  .glow-pixel:hover, .glow-pixel:focus-within{
+    box-shadow: 0 25px 60px -15px rgba(74,222,128,0.45), 0 0 0 1px rgba(74,222,128,0.5) inset;
+    border-color: rgba(74,222,128,0.7) !important;
   }
 
   .tile{
@@ -141,6 +145,29 @@
     50%{ transform: scale(1.18); }
   }
 
+  .pixel{
+    transition: transform .3s ease, background-color .3s ease;
+  }
+  .group:hover .pixel, .group:focus-within .pixel{
+    animation: pixel-blink 1.2s steps(1) infinite;
+  }
+  .pixel:nth-child(odd){ animation-delay: 0s !important; }
+  .pixel:nth-child(even){ animation-delay: .3s !important; }
+  .pixel:nth-child(3n){ animation-delay: .6s !important; }
+  @keyframes pixel-blink{
+    0%,100%{ background-color: rgba(74,222,128,0.25); transform: scale(1); }
+    50%{ background-color: rgba(74,222,128,0.9); transform: scale(1.12); }
+  }
+
+  .play-btn-pixel{
+    transition: all .3s ease;
+  }
+  .play-btn-pixel:hover{
+    background-color: var(--pixel);
+    color: #06210f;
+    box-shadow: 0 10px 30px -8px rgba(74,222,128,0.6);
+  }
+
   .play-btn-violet{
     transition: all .3s ease;
   }
@@ -192,19 +219,19 @@
       <div class="w-9 h-9 rounded-md bg-[var(--gold)] flex items-center justify-center font-display text-[#1a1200] text-sm">GH</div>
       <span class="font-mono uppercase tracking-[0.25em] text-xs text-[var(--muted)]">GameHub</span>
     </div>
-    <span class="font-mono text-xs text-[var(--muted)] hidden sm:block">4 SPIELE VERFÜGBAR</span>
+    <span class="font-mono text-xs text-[var(--muted)] hidden sm:block">5 SPIELE VERFÜGBAR</span>
   </header>
 
   <!-- Hero -->
   <section class="max-w-6xl mx-auto px-6 pt-16 pb-14 md:pt-20 md:pb-20">
     <p class="font-mono uppercase tracking-[0.3em] text-xs text-[var(--gold)] mb-4">Willkommen im Studio</p>
     <h1 class="font-display text-3xl sm:text-5xl md:text-6xl lg:text-7xl leading-[1.15] max-w-3xl">
-      VIER SPIELE.<br>
+      FÜNF SPIELE.<br>
       <span class="text-[var(--muted)]">DEIN WISSEN.</span><br>
       <span class="text-[var(--gold)]">DEIN GEFÜHL FÜR ZEIT.</span>
     </h1>
     <p class="mt-6 text-base sm:text-lg text-[var(--muted)] max-w-xl">
-      Tritt bei einer Quizshow im Jeopardy-Format an, bringe historische Gegenstände in die richtige Reihenfolge auf dem Zeitstrahl, liefere dir ein schnelles Buzzer-Duell oder lerne dein Team im Kennenlern-Quiz besser kennen.
+      Tritt bei einer Quizshow im Jeopardy-Format an, bringe historische Gegenstände in die richtige Reihenfolge auf dem Zeitstrahl, liefere dir ein schnelles Buzzer-Duell, lerne dein Team im Kennenlern-Quiz besser kennen oder teste dein Wissen im knackigen Pixel-Quiz.
     </p>
   </section>
 
@@ -335,11 +362,49 @@
         </div>
       </a>
 
+      <!-- Karte 5: Pixel-Quiz (volle Breite als Bonus-Feld) -->
+      <a href="/gamehub/pixel-quiz"
+         class="group card-lift glow-pixel sm:col-span-2 relative overflow-hidden rounded-2xl border border-white/10 bg-[var(--panel)] p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 min-h-[220px]">
+
+        <div class="board-grid absolute inset-0 pointer-events-none opacity-40"></div>
+
+        <div class="relative">
+          <span class="font-mono uppercase tracking-[0.2em] text-xs text-[var(--pixel)]">Modus · Retro-Wissen</span>
+          <h2 class="font-display text-2xl sm:text-4xl mt-4 break-words">Pixel-Quiz</h2>
+          <p class="mt-4 text-[var(--muted)] max-w-md break-words">
+            Beantworte knackige Fragen im 8-Bit-Look und schalte Pixel für Pixel neue Highscores frei — schnell, bunt und ziemlich süchtig machend.
+          </p>
+        </div>
+
+        <div class="relative flex flex-col items-start sm:items-end gap-6 shrink-0">
+          <!-- Pixel-Raster -->
+          <div class="grid grid-cols-6 gap-1.5">
+            <span class="pixel w-3.5 h-3.5 rounded-[2px] bg-[var(--pixel)]/25"></span>
+            <span class="pixel w-3.5 h-3.5 rounded-[2px] bg-[var(--pixel)]/25"></span>
+            <span class="pixel w-3.5 h-3.5 rounded-[2px] bg-[var(--pixel)]/25"></span>
+            <span class="pixel w-3.5 h-3.5 rounded-[2px] bg-[var(--pixel)]/25"></span>
+            <span class="pixel w-3.5 h-3.5 rounded-[2px] bg-[var(--pixel)]/25"></span>
+            <span class="pixel w-3.5 h-3.5 rounded-[2px] bg-[var(--pixel)]/25"></span>
+            <span class="pixel w-3.5 h-3.5 rounded-[2px] bg-[var(--pixel)]/25"></span>
+            <span class="pixel w-3.5 h-3.5 rounded-[2px] bg-[var(--pixel)]/25"></span>
+            <span class="pixel w-3.5 h-3.5 rounded-[2px] bg-[var(--pixel)]/25"></span>
+            <span class="pixel w-3.5 h-3.5 rounded-[2px] bg-[var(--pixel)]/25"></span>
+            <span class="pixel w-3.5 h-3.5 rounded-[2px] bg-[var(--pixel)]/25"></span>
+            <span class="pixel w-3.5 h-3.5 rounded-[2px] bg-[var(--pixel)]/25"></span>
+          </div>
+
+          <span class="play-btn-pixel inline-flex items-center gap-2 rounded-full border border-[var(--pixel)] text-[var(--pixel)] font-semibold px-6 py-3">
+            Jetzt spielen
+            <span class="arrow">→</span>
+          </span>
+        </div>
+      </a>
+
     </div>
   </main>
 
   <footer class="max-w-6xl mx-auto px-6 pb-10">
-    <p class="font-mono text-xs text-[var(--muted)]">GameHub — vier Spiele, ein Startpunkt.</p>
+    <p class="font-mono text-xs text-[var(--muted)]">GameHub — fünf Spiele, ein Startpunkt.</p>
   </footer>
 
 </body>
