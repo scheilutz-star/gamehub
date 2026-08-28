@@ -1,1 +1,762 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>P2P Werwolf</title>
+    <link rel="icon" type="image/png" sizes="40x40" href="favicon.png">
+  <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#0f172a',
+                        bloodRed: '#dc2626',
+                        moonYellow: '#fde047',
+                        glassBg: 'rgba(15, 23, 42, 0.7)',
+                        glassBorder: 'rgba(255, 255, 255, 0.1)'
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Creepster&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
 
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fafc; overscroll-behavior-y: contain; overflow-x: hidden; }
+        h1, h2, .wolf-font { font-family: 'Creepster', cursive; letter-spacing: 2px; }
+        .glass { background: var(--glassBg); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--glassBorder); }
+        .btn-press:active { transform: scale(0.95); }
+        .role-card { transition: transform 0.6s; transform-style: preserve-3d; }
+        .role-card.flipped { transform: rotateY(180deg); }
+        .role-front, .role-back { backface-visibility: hidden; position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .role-back { transform: rotateY(180deg); }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #dc2626; border-radius: 4px; }
+
+        /* --- SPIEL ANIMATIONEN --- */
+        .anim-idle {
+            animation: breathe 4s infinite ease-in-out;
+        }
+        @keyframes breathe {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-6px); }
+        }
+
+        .anim-bite {
+            animation: death-bite 1.5s forwards;
+            pointer-events: none;
+        }
+        @keyframes death-bite {
+            0% { transform: rotate(0deg); filter: sepia(0); }
+            15% { transform: rotate(-15deg) scale(1.1); filter: sepia(1) hue-rotate(-50deg) saturate(10); }
+            30% { transform: rotate(15deg) scale(1.1); filter: sepia(1) hue-rotate(-50deg) saturate(10); }
+            50% { transform: rotate(-10deg); filter: grayscale(100%); }
+            100% { transform: rotate(90deg) scale(0.9); filter: grayscale(100%); opacity: 0.4; }
+        }
+
+        .anim-magic {
+            animation: heal-glow 2s forwards;
+        }
+        @keyframes heal-glow {
+            0% { filter: drop-shadow(0 0 0px #4dff4d); }
+            50% { filter: drop-shadow(0 0 40px #4dff4d); transform: translateY(-15px) scale(1.05); }
+            100% { filter: drop-shadow(0 0 0px #4dff4d); }
+        }
+
+        .anim-vision {
+            animation: mystic-eye 2s forwards;
+        }
+        @keyframes mystic-eye {
+            0% { filter: drop-shadow(0 0 0px #a64dff); }
+            50% { filter: drop-shadow(0 0 35px #a64dff); transform: scale(1.05); }
+            100% { filter: drop-shadow(0 0 0px #a64dff); }
+        }
+        
+        .anim-shake {
+            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        }
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-2px, 0, 0); }
+            20%, 80% { transform: translate3d(4px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-8px, 0, 0); }
+            40%, 60% { transform: translate3d(8px, 0, 0); }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-bloodRed selection:text-white bg-[url('https://www.transparenttextures.com/patterns/stardust.png')]">
+
+    <!-- Start/Role Screen -->
+    <div id="screen-role" class="flex-1 flex items-center justify-center p-6">
+        <div class="glass p-8 rounded-2xl w-full max-w-md text-center shadow-[0_0_40px_rgba(220,38,38,0.2)] border border-red-900/50">
+            <div class="text-6xl text-moonYellow mb-4 drop-shadow-[0_0_15px_rgba(253,224,71,0.5)]"><i class="fa-solid fa-moon"></i></div>
+            <h1 class="text-5xl mb-2 text-transparent bg-clip-text bg-gradient-to-b from-gray-100 to-gray-500">Werwolf</h1>
+            <p class="text-gray-400 mb-8 font-semibold">Düsteres Dorf. Versteckte Feinde.</p>
+            
+            <button onclick="App.initHost()" class="w-full mb-4 py-4 rounded-xl bg-bloodRed hover:bg-red-700 text-white font-bold text-lg transition-colors btn-press flex items-center justify-center gap-3 shadow-lg shadow-red-900/50">
+                <i class="fa-solid fa-book-skull"></i> Als Erzähler (Host) starten
+            </button>
+            <div class="relative flex py-2 items-center">
+                <div class="flex-grow border-t border-gray-700"></div>
+                <span class="flex-shrink-0 mx-4 text-gray-500 text-sm">oder</span>
+                <div class="flex-grow border-t border-gray-700"></div>
+            </div>
+            <button onclick="App.showPlayerJoin()" class="w-full mt-4 py-4 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white font-bold text-lg transition-colors btn-press flex items-center justify-center gap-3">
+                <i class="fa-solid fa-user-secret"></i> Dem Dorf beitreten
+            </button>
+        </div>
+    </div>
+
+    <!-- Host Lobby -->
+    <div id="screen-host-lobby" class="hidden flex-1 flex flex-col items-center justify-center p-6">
+        <div class="w-full max-w-5xl grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div class="glass p-8 rounded-2xl flex flex-col items-center text-center">
+                <h2 class="text-3xl mb-2 text-moonYellow">Dorf-Code</h2>
+                <div class="text-6xl font-extrabold tracking-widest text-bloodRed mb-6 drop-shadow-md" id="host-lobby-id">---</div>
+                <div class="bg-white p-2 rounded-lg mb-4 shadow-lg"><canvas id="qr-code"></canvas></div>
+                <p class="text-sm text-gray-400 mb-6">Spieler scannen den Code, um dem Dorf beizutreten.</p>
+                
+                <div class="w-full bg-slate-900 p-4 rounded-xl text-left border border-slate-700 mb-4">
+                    <h3 class="font-bold text-moonYellow mb-2">Rollen-Setup</h3>
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between items-center"><span><i class="fa-solid fa-paw text-red-500"></i> Werwölfe</span> <input type="number" id="count-wolf" value="2" min="1" max="5" class="w-16 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-center"></div>
+                        <div class="flex justify-between items-center"><span><i class="fa-solid fa-eye text-purple-400"></i> Seherin</span> <input type="number" id="count-seer" value="1" min="0" max="1" class="w-16 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-center"></div>
+                        <div class="flex justify-between items-center"><span><i class="fa-solid fa-flask text-green-400"></i> Hexe</span> <input type="number" id="count-witch" value="1" min="0" max="1" class="w-16 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-center"></div>
+                        <div class="flex justify-between items-center"><span><i class="fa-solid fa-child-dress text-pink-400"></i> Kleines Mädchen</span> <input type="number" id="count-girl" value="1" min="0" max="1" class="w-16 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-center"></div>
+                        <p class="text-xs text-gray-500 mt-2 italic">Der Rest der Spieler wird automatisch zum Dorfbewohner.</p>
+                    </div>
+                </div>
+
+                <button onclick="Host.startGame()" class="w-full py-4 bg-bloodRed hover:bg-red-700 text-white rounded-xl font-bold transition shadow-lg btn-press text-xl"><i class="fa-solid fa-play"></i> Die erste Nacht beginnt</button>
+            </div>
+            <div class="glass p-8 rounded-2xl flex flex-col">
+                <h2 class="text-2xl font-bold mb-4 flex justify-between font-sans">
+                    <span>Spieler</span> <span class="text-moonYellow" id="host-player-count">0</span>
+                </h2>
+                <div id="host-player-list" class="flex-1 overflow-y-auto space-y-3 max-h-[500px]">
+                    <div class="text-gray-500 italic text-center mt-10">Warte auf Dorfbewohner...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Host Dashboard (Game Master Screen) -->
+    <div id="screen-host-dashboard" class="hidden flex-1 flex flex-col p-4 w-full h-screen">
+        <div class="flex justify-between items-center mb-4 bg-slate-900 p-4 rounded-xl border border-slate-700 shadow-md">
+            <h2 class="text-3xl text-moonYellow m-0 leading-none">Erzähler-Pult</h2>
+            <div id="host-phase-indicator" class="px-4 py-1.5 bg-indigo-900 text-indigo-200 border border-indigo-500 rounded-full font-bold text-sm tracking-wide">NACHT</div>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 flex-1 overflow-hidden">
+            <!-- Steuerung -->
+            <div class="glass p-4 rounded-xl flex flex-col gap-3 overflow-y-auto">
+                <h3 class="font-bold text-gray-300 border-b border-gray-700 pb-2 mb-2"><i class="fa-solid fa-gamepad"></i> Phasen-Steuerung</h3>
+                
+                <button onclick="Host.triggerPhase('night')" class="py-3 bg-indigo-950 hover:bg-indigo-900 border border-indigo-700 rounded-lg text-indigo-200 font-bold btn-press"><i class="fa-solid fa-moon"></i> Alle schlafen ein</button>
+                <button onclick="Host.triggerPhase('seer')" class="py-3 bg-purple-900 hover:bg-purple-800 border border-purple-700 rounded-lg text-purple-200 font-bold btn-press"><i class="fa-solid fa-eye"></i> Seherin erwacht</button>
+                <button onclick="Host.triggerPhase('wolves')" class="py-3 bg-red-950 hover:bg-red-900 border border-red-700 rounded-lg text-red-200 font-bold btn-press"><i class="fa-solid fa-paw"></i> Werwölfe erwachen</button>
+                <button onclick="Host.triggerPhase('witch')" class="py-3 bg-green-950 hover:bg-green-900 border border-green-700 rounded-lg text-green-200 font-bold btn-press"><i class="fa-solid fa-flask"></i> Hexe erwacht</button>
+                <button onclick="Host.triggerPhase('day')" class="py-3 bg-yellow-900 hover:bg-yellow-800 border border-yellow-700 rounded-lg text-yellow-200 font-bold mt-4 btn-press"><i class="fa-solid fa-sun"></i> Der Tag bricht an</button>
+                <button onclick="Host.triggerPhase('vote')" class="py-3 bg-slate-700 hover:bg-slate-600 border border-slate-500 rounded-lg text-white font-bold btn-press"><i class="fa-solid fa-gavel"></i> Dorf-Abstimmung</button>
+                
+                <div class="mt-auto pt-4 border-t border-slate-700">
+                    <button onclick="Host.endGame()" class="w-full py-2 bg-red-600 hover:bg-red-700 rounded-lg font-bold text-sm text-white"><i class="fa-solid fa-flag-checkered"></i> Spiel abbrechen</button>
+                </div>
+            </div>
+
+            <!-- Spielerliste für Host -->
+            <div class="glass p-4 rounded-xl md:col-span-2 flex flex-col">
+                <h3 class="font-bold text-gray-300 border-b border-gray-700 pb-2 mb-4"><i class="fa-solid fa-users"></i> Dorf-Register</h3>
+                <div id="host-game-players" class="grid grid-cols-2 gap-2 overflow-y-auto pb-4">
+                    <!-- Gefüllt durch JS -->
+                </div>
+                
+                <div class="mt-auto bg-slate-900 p-3 rounded-lg border border-slate-700 h-32 overflow-y-auto font-mono text-xs text-gray-400" id="host-log">
+                    <div>> Spiel gestartet. Die erste Nacht beginnt.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Player Join -->
+    <div id="screen-player-join" class="hidden flex-1 flex items-center justify-center p-6">
+        <div class="glass p-8 rounded-2xl w-full max-w-md">
+            <button onclick="UI.show('screen-role')" class="text-gray-400 hover:text-white mb-6"><i class="fa-solid fa-arrow-left"></i> Zurück</button>
+            <h2 class="text-3xl text-moonYellow mb-6">Dorf betreten</h2>
+            
+            <div class="space-y-4 font-sans">
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Dein Name</label>
+                    <input type="text" id="player-name-input" maxlength="15" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-moonYellow">
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Dorf-Code</label>
+                    <input type="text" id="player-lobby-input" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-moonYellow uppercase font-mono tracking-widest text-xl">
+                </div>
+                <button onclick="Player.join()" id="btn-join" class="w-full mt-4 py-4 rounded-xl bg-moonYellow hover:bg-yellow-400 text-slate-900 font-bold text-lg transition-colors btn-press shadow-lg shadow-yellow-900/20">
+                    Beitreten
+                </button>
+            </div>
+            <p id="join-error" class="text-red-400 text-sm mt-4 hidden text-center"></p>
+        </div>
+    </div>
+
+    <!-- Player Waiting (Lobby) -->
+    <div id="screen-player-waiting" class="hidden flex-1 flex flex-col items-center justify-center p-6 text-center">
+        <div class="text-5xl text-gray-600 mb-6 animate-pulse"><i class="fa-solid fa-campground"></i></div>
+        <h2 class="text-2xl font-bold mb-2">Du bist im Dorf!</h2>
+        <p class="text-gray-400">Warte darauf, dass der Erzähler das Spiel startet und die Rollen verteilt...</p>
+    </div>
+
+    <!-- Player Game Screen -->
+    <div id="screen-player-game" class="hidden flex-1 flex flex-col w-full h-screen bg-slate-950 relative overflow-hidden transition-colors duration-1000">
+        
+        <!-- Top Bar -->
+        <div class="p-4 flex justify-between items-center bg-slate-900/80 backdrop-blur-sm shadow-md relative z-30 border-b border-slate-800">
+            <div class="font-bold text-gray-200"><i class="fa-solid fa-user"></i> <span id="player-my-name">Name</span></div>
+            <div id="player-status-badge" class="bg-green-900/50 text-green-400 border border-green-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">Lebendig</div>
+        </div>
+
+        <div class="flex-1 flex flex-col items-center p-4 relative z-20 overflow-y-auto pb-24">
+            
+            <div id="player-phase-title" class="text-4xl text-indigo-300 mt-4 mb-8 drop-shadow-[0_0_10px_rgba(165,180,252,0.3)] text-center transition-all duration-500">
+                Die Nacht beginnt...
+            </div>
+
+            <!-- Rollenkarte (Mit Animation ID und Klassen) -->
+            <div id="player-card-container" class="relative w-64 h-80 perspective-1000 cursor-pointer group mb-8 anim-idle" onclick="this.querySelector('.role-card').classList.toggle('flipped')">
+                <div class="role-card w-full h-full absolute transition-transform duration-700 shadow-2xl rounded-2xl">
+                    <div class="role-front bg-slate-800 rounded-2xl border-4 border-slate-600 flex flex-col items-center justify-center shadow-[inset_0_0_50px_rgba(0,0,0,0.5)]">
+                        <i class="fa-solid fa-question text-6xl text-slate-500 mb-4"></i>
+                        <p class="text-slate-400 font-bold uppercase tracking-widest text-sm">Tippen zum Aufdecken</p>
+                    </div>
+                    <div class="role-back bg-slate-900 rounded-2xl border-4 flex flex-col items-center justify-center p-4 text-center" id="player-role-card-inner">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Aktionsbereich -->
+            <div id="player-action-area" class="w-full max-w-md hidden flex-col gap-3 bg-slate-900/80 p-5 rounded-2xl border border-slate-700 shadow-xl backdrop-blur-md transition-all">
+                <h3 id="player-action-prompt" class="font-bold text-center text-lg mb-2 text-moonYellow">Wähle ein Opfer:</h3>
+                <div id="player-action-buttons" class="grid grid-cols-2 gap-2">
+                </div>
+            </div>
+
+            <!-- Toter Screen Overlay -->
+            <div id="player-dead-overlay" class="hidden absolute inset-0 z-50 bg-red-950/90 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center transition-opacity duration-1000">
+                <i class="fa-solid fa-skull text-8xl text-red-500 mb-6 drop-shadow-[0_0_20px_rgba(220,38,38,0.8)]"></i>
+                <h2 class="text-4xl text-white font-black mb-4 wolf-font">Du bist tot.</h2>
+                <p class="text-red-200 text-lg">Du wurdest eliminiert. Du darfst nicht mehr sprechen und hast deine Augen dauerhaft geöffnet, um das restliche Spiel zu beobachten.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Win Screen (Siegerpodest) -->
+    <div id="screen-game-over" class="hidden flex-1 flex flex-col items-center pt-10 pb-6 px-4 relative bg-slate-950 overflow-y-auto w-full min-h-screen">
+        <h1 id="win-title" class="text-5xl md:text-7xl font-black mb-2 drop-shadow-[0_5px_5px_rgba(0,0,0,0.8)] z-10 text-center text-white wolf-font">Sieg!</h1>
+        <p id="win-desc" class="text-xl text-gray-300 z-10 text-center mb-8">Die Fraktion hat gewonnen.</p>
+        
+        <!-- Das Siegerpodest (Wer war was?) -->
+        <div id="win-podium" class="w-full max-w-2xl bg-slate-900/80 p-6 rounded-2xl border border-slate-700 shadow-2xl backdrop-blur-md mb-8 z-10">
+            <!-- Dynamisch durch JS gefüllt -->
+        </div>
+
+        <button onclick="location.reload()" class="px-8 py-4 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold text-white text-lg transition-all shadow-xl z-10 border border-slate-600 mb-8"><i class="fa-solid fa-rotate-right mr-2"></i> Neues Spiel starten</button>
+    </div>
+
+    <script>
+        const ROLES = {
+            'villager': { name: 'Dorfbewohner', icon: 'fa-user', color: '#3b82f6', border: 'border-blue-500', bg: 'bg-blue-900/30', desc: 'Du hast keine besonderen Fähigkeiten. Finde die Wölfe.' },
+            'wolf': { name: 'Werwolf', icon: 'fa-paw', color: '#dc2626', border: 'border-red-500', bg: 'bg-red-900/30', desc: 'Erwache nachts und bestimme mit den anderen Wölfen ein Opfer.' },
+            'seer': { name: 'Seherin', icon: 'fa-eye', color: '#a855f7', border: 'border-purple-500', bg: 'bg-purple-900/30', desc: 'Erwache nachts und erfahre die Identität eines Mitspielers.' },
+            'witch': { name: 'Hexe', icon: 'fa-flask', color: '#22c55e', border: 'border-green-500', bg: 'bg-green-900/30', desc: 'Du hast je einen Heil- und Gifttrank. Nutze sie weise.' },
+            'girl': { name: 'Kleines Mädchen', icon: 'fa-child-dress', color: '#f472b6', border: 'border-pink-500', bg: 'bg-pink-900/30', desc: 'Du darfst nachts heimlich blinzeln und die Opfer der Wölfe sehen.' }
+        };
+
+        const AppState = {
+            peer: null,
+            isHost: false,
+            lobbyId: null,
+            players: {}, 
+            myId: null,
+            myName: '',
+            myRole: null,
+            hostConn: null,
+            currentPhase: 'setup',
+            nightVictimId: null,
+            healedId: null,
+            poisonedId: null
+        };
+
+        const UI = {
+            screens: ['screen-role', 'screen-host-lobby', 'screen-host-dashboard', 'screen-player-join', 'screen-player-waiting', 'screen-player-game', 'screen-game-over'],
+            show(screenId) {
+                this.screens.forEach(s => document.getElementById(s).classList.add('hidden'));
+                document.getElementById(screenId).classList.remove('hidden');
+            }
+        };
+
+        const App = {
+            init() { UI.show('screen-role'); },
+            showPlayerJoin() { UI.show('screen-player-join'); },
+            generateId() { return Math.random().toString(36).substring(2, 6).toUpperCase(); },
+            
+            initHost() {
+                AppState.isHost = true;
+                AppState.lobbyId = App.generateId();
+                UI.show('screen-host-lobby');
+                document.getElementById('host-lobby-id').innerText = AppState.lobbyId;
+                
+                new QRious({ element: document.getElementById('qr-code'), value: AppState.lobbyId, size: 150, backgroundAlpha: 0, foreground: '#fde047' });
+
+                AppState.peer = new Peer(AppState.lobbyId);
+                AppState.peer.on('connection', conn => Host.handleConnection(conn));
+            },
+
+            renderGameOver(data) {
+                UI.show('screen-game-over');
+                document.getElementById('win-title').innerText = data.title;
+                document.getElementById('win-desc').innerText = data.desc;
+                
+                const screen = document.getElementById('screen-game-over');
+                screen.className = `flex-1 flex flex-col items-center pt-10 pb-6 px-4 relative overflow-y-auto w-full min-h-screen ${data.winner === 'wolves' ? 'bg-red-950' : 'bg-blue-950'}`;
+                
+                document.getElementById('win-title').style.color = data.winner === 'wolves' ? '#fca5a5' : '#93c5fd';
+
+                const podium = document.getElementById('win-podium');
+                podium.innerHTML = `
+                    <h3 class="text-2xl text-center mb-6 text-moonYellow font-bold border-b border-slate-700 pb-2"><i class="fa-solid fa-masks-theater"></i> Die wahren Identitäten</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        ${data.players.map(p => `
+                            <div class="flex items-center justify-between p-3 rounded-lg bg-slate-800 border-l-4 ${p.alive ? 'opacity-100 shadow-md' : 'opacity-40 grayscale'}" style="border-color: ${p.roleData.color}">
+                                <div class="flex items-center gap-3">
+                                    <i class="fa-solid ${p.roleData.icon} text-xl" style="color: ${p.roleData.color}"></i>
+                                    <span class="font-bold text-white text-lg">${p.name} ${p.alive ? '' : ' <i class="fa-solid fa-skull text-red-500 text-sm ml-1"></i>'}</span>
+                                </div>
+                                <span class="text-xs uppercase tracking-wider font-bold px-2 py-1 rounded" style="background-color: ${p.roleData.bg}; color: ${p.roleData.color}">${p.roleData.name}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+        };
+
+        // --- HOST LOGIC ---
+        const Host = {
+            handleConnection(conn) {
+                conn.on('data', data => {
+                    if(data.type === 'join') {
+                        AppState.players[conn.peer] = { id: conn.peer, conn, name: data.name, role: null, alive: true, potions: {heal: 1, poison: 1} };
+                        Host.updateLobbyList();
+                        conn.send({ type: 'joined' });
+                    }
+                    else if (data.type === 'action') Host.handlePlayerAction(conn.peer, data);
+                });
+                conn.on('close', () => { 
+                    delete AppState.players[conn.peer];
+                    Host.updateLobbyList();
+                    Host.updateDashboard();
+                });
+            },
+
+            updateLobbyList() {
+                const countElem = document.getElementById('host-player-count');
+                const list = document.getElementById('host-player-list');
+                const players = Object.values(AppState.players);
+                countElem.innerText = players.length;
+                
+                list.innerHTML = players.length === 0 ? '<div class="text-gray-500 italic text-center mt-10">Warte auf Dorfbewohner...</div>' : players.map(p => `<div class="bg-slate-800 p-3 rounded-lg font-bold border-l-4 border-slate-500">${p.name}</div>`).join('');
+            },
+
+            log(msg) {
+                const logBox = document.getElementById('host-log');
+                logBox.innerHTML += `<div>> ${msg}</div>`;
+                logBox.scrollTop = logBox.scrollHeight;
+            },
+
+            startGame() {
+                const playerIds = Object.keys(AppState.players);
+                const totalPlayers = playerIds.length;
+                if (totalPlayers < 3) { alert("Mindestens 3 Spieler benötigt!"); return; }
+
+                let deck = [];
+                const cWolf = parseInt(document.getElementById('count-wolf').value);
+                const cSeer = parseInt(document.getElementById('count-seer').value);
+                const cWitch = parseInt(document.getElementById('count-witch').value);
+                const cGirl = parseInt(document.getElementById('count-girl').value);
+                
+                for(let i=0; i<cWolf; i++) deck.push('wolf');
+                for(let i=0; i<cSeer; i++) deck.push('seer');
+                for(let i=0; i<cWitch; i++) deck.push('witch');
+                for(let i=0; i<cGirl; i++) deck.push('girl');
+                
+                while(deck.length < totalPlayers) deck.push('villager');
+                deck = deck.slice(0, totalPlayers).sort(() => Math.random() - 0.5);
+
+                playerIds.forEach((id, index) => {
+                    AppState.players[id].role = deck[index];
+                    AppState.players[id].alive = true;
+                    AppState.players[id].conn.send({ type: 'game_start', role: deck[index], roleData: ROLES[deck[index]] });
+                });
+
+                UI.show('screen-host-dashboard');
+                Host.updateDashboard();
+                Host.triggerPhase('night');
+            },
+
+            updateDashboard() {
+                const container = document.getElementById('host-game-players');
+                container.innerHTML = '';
+                Object.values(AppState.players).forEach(p => {
+                    const r = ROLES[p.role];
+                    // Lebende Spieler erhalten anim-idle
+                    const styleClass = p.alive ? 'opacity-100 anim-idle' : 'opacity-40 grayscale';
+                    const actionBtn = p.alive ? `<button onclick="Host.killPlayer('${p.id}')" class="text-xs bg-red-900/50 hover:bg-red-600 text-white px-2 py-1 rounded mt-2"><i class="fa-solid fa-skull"></i> Töten</button>` : `<span class="text-xs text-red-500 font-bold mt-2">TOT</span>`;
+                    
+                    container.innerHTML += `
+                        <div id="host-card-${p.id}" class="bg-slate-800 p-3 rounded-lg border-l-4 flex flex-col transition-all duration-500 ${styleClass}" style="border-color: ${r.color}">
+                            <div class="font-bold truncate">${p.name}</div>
+                            <div class="text-xs" style="color: ${r.color}"><i class="fa-solid ${r.icon}"></i> ${r.name}</div>
+                            ${actionBtn}
+                        </div>
+                    `;
+                });
+            },
+
+            killPlayer(id) {
+                if(AppState.players[id] && AppState.players[id].alive) {
+                    AppState.players[id].alive = false;
+                    AppState.players[id].conn.send({ type: 'died' });
+                    Host.log(`${AppState.players[id].name} ist gestorben.`);
+                    
+                    // Host-Animation: Karte schüttelt sich beim Tod, Update danach
+                    const card = document.getElementById(`host-card-${id}`);
+                    if(card) {
+                        card.classList.remove('anim-idle');
+                        card.classList.add('anim-shake', 'bg-red-900');
+                        setTimeout(() => { Host.updateDashboard(); Host.checkWinCondition(); }, 600);
+                    } else {
+                        Host.updateDashboard();
+                        Host.checkWinCondition();
+                    }
+                }
+            },
+
+            checkWinCondition() {
+                const alivePlayers = Object.values(AppState.players).filter(p => p.alive);
+                const aliveWolves = alivePlayers.filter(p => p.role === 'wolf').length;
+                const aliveVillagers = alivePlayers.length - aliveWolves;
+
+                if (aliveWolves === 0) {
+                    Host.triggerGameOver('village');
+                } else if (aliveWolves >= aliveVillagers) {
+                    Host.triggerGameOver('wolves');
+                }
+            },
+
+            triggerGameOver(winner) {
+                let title, desc;
+                if (winner === 'village') {
+                    title = 'Das Dorf siegt!';
+                    desc = 'Alle Werwölfe wurden erfolgreich vernichtet.';
+                } else {
+                    title = 'Die Werwölfe siegen!';
+                    desc = 'Die Werwölfe haben die Überhand gewonnen und fressen den Rest des Dorfes.';
+                }
+
+                const playerStats = Object.values(AppState.players).map(p => ({
+                    name: p.name, role: p.role, roleData: ROLES[p.role], alive: p.alive
+                }));
+
+                const payload = { type: 'game_over', winner, title, desc, players: playerStats };
+                
+                Host.broadcast(payload);
+                App.renderGameOver(payload); 
+            },
+
+            broadcast(data) {
+                Object.values(AppState.players).forEach(p => { if(p.conn && p.conn.open) p.conn.send(data); });
+            },
+
+            getAlivePlayers() {
+                return Object.values(AppState.players).filter(p => p.alive).map(p => ({ id: p.id, name: p.name }));
+            },
+
+            triggerPhase(phase) {
+                AppState.currentPhase = phase;
+                const indicator = document.getElementById('host-phase-indicator');
+                Host.broadcast({ type: 'clear_action' });
+
+                if (phase === 'night') {
+                    indicator.innerText = 'NACHT'; indicator.className = 'px-4 py-1.5 bg-indigo-900 text-indigo-200 border border-indigo-500 rounded-full font-bold text-sm tracking-wide';
+                    AppState.nightVictimId = null; AppState.healedId = null; AppState.poisonedId = null;
+                    Host.log("Die Nacht bricht an.");
+                    Host.broadcast({ type: 'phase_change', phase: 'night', text: 'Die Nacht beginnt. Schließe deine Augen.', bg: 'bg-slate-950', textCol: 'text-indigo-300' });
+                } 
+                else if (phase === 'seer') {
+                    indicator.innerText = 'SEHERIN'; indicator.className = 'px-4 py-1.5 bg-purple-900 text-purple-200 border border-purple-500 rounded-full font-bold text-sm tracking-wide';
+                    Host.broadcast({ type: 'phase_change', phase: 'seer', text: 'Die Seherin ist am Zug.', bg: 'bg-slate-950', textCol: 'text-slate-500' });
+                    
+                    const seer = Object.values(AppState.players).find(p => p.role === 'seer' && p.alive);
+                    if (seer) {
+                        const targets = Host.getAlivePlayers().filter(p => p.id !== seer.id);
+                        seer.conn.send({ type: 'request_action', prompt: 'Wessen Rolle möchtest du sehen?', options: targets, actionType: 'seer_inspect' });
+                    } else { Host.log("(Keine lebende Seherin im Spiel)"); }
+                }
+                else if (phase === 'wolves') {
+                    indicator.innerText = 'WERWÖLFE'; indicator.className = 'px-4 py-1.5 bg-red-900 text-red-200 border border-red-500 rounded-full font-bold text-sm tracking-wide';
+                    Host.broadcast({ type: 'phase_change', phase: 'wolves', text: 'Die Werwölfe suchen ihr Opfer.', bg: 'bg-slate-950', textCol: 'text-slate-500' });
+                    
+                    const wolves = Object.values(AppState.players).filter(p => p.role === 'wolf' && p.alive);
+                    const targets = Host.getAlivePlayers().filter(p => p.role !== 'wolf');
+                    wolves.forEach(w => w.conn.send({ type: 'request_action', prompt: 'Wen wollt ihr fressen?', options: targets, actionType: 'wolf_kill' }));
+
+                    const girl = Object.values(AppState.players).find(p => p.role === 'girl' && p.alive);
+                    if(girl) girl.conn.send({ type: 'girl_peek', text: 'Du blinzelst. Die Wölfe sind aktiv...' });
+                }
+                else if (phase === 'witch') {
+                    indicator.innerText = 'HEXE'; indicator.className = 'px-4 py-1.5 bg-green-900 text-green-200 border border-green-500 rounded-full font-bold text-sm tracking-wide';
+                    Host.broadcast({ type: 'phase_change', phase: 'witch', text: 'Die Hexe braut ihre Tränke.', bg: 'bg-slate-950', textCol: 'text-slate-500' });
+                    
+                    const witch = Object.values(AppState.players).find(p => p.role === 'witch' && p.alive);
+                    if (witch) {
+                        const victimName = AppState.nightVictimId ? AppState.players[AppState.nightVictimId].name : "Niemand";
+                        let options = [];
+                        if (witch.potions.heal > 0 && AppState.nightVictimId) options.push({ id: 'heal_' + AppState.nightVictimId, name: `Heilen (${victimName})` });
+                        if (witch.potions.poison > 0) options.push({ id: 'poison_btn', name: 'Vergiften (Jemanden)' });
+                        options.push({ id: 'skip', name: 'Nichts tun' });
+                        
+                        witch.conn.send({ type: 'request_action', prompt: `Opfer der Wölfe: ${victimName}. Was tust du?`, options: options, actionType: 'witch_choice' });
+                    }
+                }
+                else if (phase === 'day') {
+                    indicator.innerText = 'TAG'; indicator.className = 'px-4 py-1.5 bg-yellow-600 text-yellow-100 border border-yellow-400 rounded-full font-bold text-sm tracking-wide';
+                    
+                    let diedThisNight = [];
+                    if (AppState.nightVictimId && AppState.nightVictimId !== AppState.healedId) diedThisNight.push(AppState.nightVictimId);
+                    if (AppState.poisonedId) diedThisNight.push(AppState.poisonedId);
+
+                    let deathText = "Das Dorf erwacht. ";
+                    if (diedThisNight.length === 0) {
+                        deathText += "Niemand ist diese Nacht gestorben!";
+                    } else {
+                        const names = diedThisNight.map(id => {
+                            if(AppState.players[id]) {
+                                AppState.players[id].alive = false;
+                                AppState.players[id].conn.send({ type: 'died' });
+                                return AppState.players[id].name;
+                            }
+                        }).join(" und ");
+                        deathText += `${names} wurde(n) tot aufgefunden.`;
+                    }
+
+                    Host.log("Tag bricht an. " + deathText);
+                    Host.updateDashboard();
+                    Host.broadcast({ type: 'phase_change', phase: 'day', text: deathText, bg: 'bg-slate-800', textCol: 'text-yellow-400' });
+                    Host.checkWinCondition();
+                }
+                else if (phase === 'vote') {
+                    indicator.innerText = 'ABSTIMMUNG'; indicator.className = 'px-4 py-1.5 bg-slate-200 text-slate-800 border border-slate-400 rounded-full font-bold text-sm tracking-wide';
+                    Host.broadcast({ type: 'phase_change', phase: 'vote', text: 'Wer soll gehängt werden?', bg: 'bg-slate-800', textCol: 'text-white' });
+                    
+                    const targets = Host.getAlivePlayers();
+                    targets.push({ id: 'skip', name: 'Niemanden hängen' });
+                    Object.values(AppState.players).filter(p=>p.alive).forEach(p => {
+                        p.conn.send({ type: 'request_action', prompt: 'Wähle einen Verdächtigen:', options: targets, actionType: 'village_vote' });
+                    });
+                }
+            },
+
+            handlePlayerAction(peerId, data) {
+                const p = AppState.players[peerId];
+                if (!p) return;
+
+                if (data.actionType === 'seer_inspect') {
+                    const target = AppState.players[data.targetId];
+                    p.conn.send({ type: 'show_result', text: `${target.name} ist: ${ROLES[target.role].name}` });
+                    Host.log(`Seherin hat ${target.name} geprüft.`);
+                }
+                else if (data.actionType === 'wolf_kill') {
+                    AppState.nightVictimId = data.targetId;
+                    Host.log(`Wölfe wählen ${AppState.players[data.targetId].name}.`);
+                    
+                    const girl = Object.values(AppState.players).find(p => p.role === 'girl' && p.alive);
+                    if(girl) girl.conn.send({ type: 'girl_peek', text: `Wölfe visieren ${AppState.players[data.targetId].name} an!` });
+                    
+                    Object.values(AppState.players).filter(w => w.role === 'wolf').forEach(w => w.conn.send({ type: 'clear_action' }));
+                }
+                else if (data.actionType === 'witch_choice') {
+                    if (data.targetId.startsWith('heal_')) {
+                        p.potions.heal = 0;
+                        AppState.healedId = data.targetId.replace('heal_', '');
+                        Host.log("Hexe nutzt Heiltrank.");
+                        p.conn.send({ type: 'clear_action' });
+                    } else if (data.targetId === 'poison_btn') {
+                        const targets = Host.getAlivePlayers().filter(t => t.id !== p.id);
+                        p.conn.send({ type: 'request_action', prompt: 'Wen vergiften?', options: targets, actionType: 'witch_poison' });
+                    } else {
+                        p.conn.send({ type: 'clear_action' });
+                    }
+                }
+                else if (data.actionType === 'witch_poison') {
+                    p.potions.poison = 0;
+                    AppState.poisonedId = data.targetId;
+                    Host.log(`Hexe vergiftet ${AppState.players[data.targetId].name}.`);
+                    p.conn.send({ type: 'clear_action' });
+                }
+                else if (data.actionType === 'village_vote') {
+                    const targetName = data.targetId === 'skip' ? 'Niemand' : AppState.players[data.targetId].name;
+                    Host.log(`${p.name} stimmt für ${targetName}.`);
+                    p.conn.send({ type: 'clear_action' });
+                    p.conn.send({ type: 'show_result', text: `Deine Wahl: ${targetName}` });
+                }
+            },
+
+            endGame() {
+                Host.triggerGameOver('village');
+            }
+        };
+
+        // --- PLAYER LOGIC ---
+        const Player = {
+            join() {
+                const name = document.getElementById('player-name-input').value.trim();
+                const lobby = document.getElementById('player-lobby-input').value.trim().toUpperCase();
+                if(!name || !lobby) return;
+
+                document.getElementById('btn-join').innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+                
+                AppState.myName = name;
+                AppState.peer = new Peer();
+                
+                AppState.peer.on('open', id => {
+                    AppState.myId = id;
+                    const conn = AppState.peer.connect(lobby);
+                    
+                    conn.on('open', () => {
+                        AppState.hostConn = conn;
+                        conn.send({ type: 'join', name });
+                    });
+
+                    conn.on('data', data => Player.handleData(data));
+                    conn.on('close', () => { alert('Verbindung zum Erzähler verloren.'); location.reload(); });
+                });
+            },
+
+            handleData(data) {
+                if (data.type === 'joined') {
+                    UI.show('screen-player-waiting');
+                }
+                else if (data.type === 'game_start') {
+                    AppState.myRole = data.role;
+                    document.getElementById('player-my-name').innerText = AppState.myName;
+                    
+                    const r = data.roleData;
+                    const card = document.getElementById('player-role-card-inner');
+                    card.className = `role-back rounded-2xl border-4 flex flex-col items-center justify-center p-4 text-center shadow-xl ${r.border} ${r.bg}`;
+                    card.innerHTML = `
+                        <i class="fa-solid ${r.icon} text-6xl mb-4" style="color: ${r.color}"></i>
+                        <h2 class="text-3xl font-black uppercase tracking-wider mb-2 wolf-font text-white" style="text-shadow: 0 0 10px ${r.color}">${r.name}</h2>
+                        <p class="text-xs text-gray-300">${r.desc}</p>
+                    `;
+                    UI.show('screen-player-game');
+                }
+                else if (data.type === 'phase_change') {
+                    const screen = document.getElementById('screen-player-game');
+                    const title = document.getElementById('player-phase-title');
+                    const cardContainer = document.getElementById('player-card-container');
+
+                    screen.className = `flex-1 flex flex-col w-full h-screen relative overflow-hidden transition-colors duration-1000 ${data.bg}`;
+                    title.className = `text-3xl md:text-4xl mt-4 mb-8 text-center transition-all duration-500 font-bold ${data.textCol}`;
+                    title.innerText = data.text;
+
+                    // Rollenspezifische Animationen beim Phasenwechsel
+                    cardContainer.classList.remove('anim-vision', 'anim-magic');
+                    if (data.phase === 'seer' && AppState.myRole === 'seer') {
+                        cardContainer.classList.add('anim-vision');
+                    } else if (data.phase === 'witch' && AppState.myRole === 'witch') {
+                        cardContainer.classList.add('anim-magic');
+                    }
+                }
+                else if (data.type === 'request_action') {
+                    const area = document.getElementById('player-action-area');
+                    const prompt = document.getElementById('player-action-prompt');
+                    const btns = document.getElementById('player-action-buttons');
+                    
+                    area.classList.remove('hidden'); area.classList.add('flex');
+                    prompt.innerText = data.prompt;
+                    btns.innerHTML = '';
+                    
+                    data.options.forEach(opt => {
+                        btns.innerHTML += `<button onclick="Player.sendAction('${opt.id}', '${data.actionType}')" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 px-2 rounded-lg text-sm transition btn-press border border-slate-500 truncate">${opt.name}</button>`;
+                    });
+                    if(navigator.vibrate) navigator.vibrate(200);
+                }
+                else if (data.type === 'clear_action') {
+                    const area = document.getElementById('player-action-area');
+                    area.classList.add('hidden'); area.classList.remove('flex');
+                }
+                else if (data.type === 'show_result') {
+                    const area = document.getElementById('player-action-area');
+                    const prompt = document.getElementById('player-action-prompt');
+                    area.classList.remove('hidden'); area.classList.add('flex');
+                    
+                    // Magische Sicht-Animation anwenden
+                    area.classList.remove('anim-vision');
+                    void area.offsetWidth; // Trigger Reflow um Animation neuzustarten
+                    area.classList.add('anim-vision');
+                    
+                    prompt.innerText = data.text;
+                    document.getElementById('player-action-buttons').innerHTML = '';
+                }
+                else if (data.type === 'girl_peek') {
+                    const area = document.getElementById('player-action-area');
+                    area.classList.remove('hidden'); area.classList.add('flex');
+                    
+                    // Schock-Vibration für das kleine Mädchen
+                    document.body.classList.add('anim-shake');
+                    setTimeout(() => document.body.classList.remove('anim-shake'), 500);
+
+                    document.getElementById('player-action-prompt').innerText = "Mädchen-Vision:";
+                    document.getElementById('player-action-buttons').innerHTML = `<div class="col-span-2 text-center text-pink-400 font-bold p-3 bg-pink-900/30 rounded border border-pink-700">${data.text}</div>`;
+                }
+                else if (data.type === 'died') {
+                    const badge = document.getElementById('player-status-badge');
+                    badge.className = "bg-red-900/50 text-red-400 border border-red-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider";
+                    badge.innerText = "Eliminiert";
+                    
+                    // Todes-Animation auf der Rollenkarte & Wackeln
+                    const card = document.getElementById('player-card-container');
+                    card.classList.remove('anim-idle');
+                    card.classList.add('anim-bite');
+                    document.body.classList.add('anim-shake');
+                    
+                    if(navigator.vibrate) navigator.vibrate([500, 200, 500]);
+
+                    // Todes-Overlay erst nach der Animation (1.5s) einblenden
+                    setTimeout(() => {
+                        document.getElementById('player-dead-overlay').classList.remove('hidden');
+                        document.body.classList.remove('anim-shake');
+                    }, 1500);
+                }
+                else if (data.type === 'game_over') {
+                    App.renderGameOver(data);
+                }
+            },
+
+            sendAction(targetId, actionType) {
+                if(!AppState.hostConn) return;
+                AppState.hostConn.send({ type: 'action', targetId, actionType });
+                Player.handleData({ type: 'clear_action' });
+            }
+        };
+
+        window.onload = () => App.init();
+    </script>
+</body>
+</html>
