@@ -1,1 +1,881 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Impostor - Party Game</title>
+    <link rel="icon" type="image/png" sizes="40x40" href="favicon.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#111827',
+                        cyanAccent: '#00E5FF',
+                        deepPurple: '#7C3AED',
+                        impostorRed: '#EF4444',
+                        glassBg: 'rgba(255, 255, 255, 0.05)',
+                        glassBorder: 'rgba(255, 255, 255, 0.1)'
+                    }
+                }
+            }
+        }
+    </script>
 
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght=400;600;800;900&display=swap" rel="stylesheet">
+
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #111827; color: #ffffff; overscroll-behavior-y: contain; }
+        .glass { background: var(--glassBg); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--glassBorder); }
+        .btn-press:active { transform: scale(0.95); }
+        
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #111827; }
+        ::-webkit-scrollbar-thumb { background: #7C3AED; border-radius: 4px; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-cyanAccent selection:text-darkBg">
+
+    <!-- COPY MODAL -->
+    <div id="copy-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm transition-opacity">
+        <div class="bg-gray-800 p-6 rounded-2xl max-w-sm w-full border border-gray-700 shadow-2xl relative">
+            <button onclick="document.getElementById('copy-modal').classList.add('hidden')" class="absolute top-4 right-4 text-gray-400 hover:text-white transition">
+                <i class="fa-solid fa-xmark text-xl"></i>
+            </button>
+            <h3 class="text-xl font-bold mb-4 text-cyanAccent"><i class="fa-solid fa-share-nodes mr-2"></i>Lobby teilen</h3>
+            <div class="space-y-3">
+                <button onclick="Host.copyToClipboard('code')" class="w-full py-4 bg-gray-900 hover:bg-gray-700 border border-gray-700 hover:border-cyanAccent rounded-xl flex items-center justify-between px-4 transition btn-press">
+                    <span class="font-bold text-gray-200">Nur Code kopieren</span> <i class="fa-solid fa-hashtag text-cyanAccent text-lg"></i>
+                </button>
+                <button onclick="Host.copyToClipboard('link')" class="w-full py-4 bg-gray-900 hover:bg-gray-700 border border-gray-700 hover:border-cyanAccent rounded-xl flex items-center justify-between px-4 transition btn-press">
+                    <span class="font-bold text-gray-200">Einladungslink kopieren</span> <i class="fa-solid fa-link text-cyanAccent text-lg"></i>
+                </button>
+            </div>
+            <p id="copy-feedback" class="text-green-400 text-sm mt-4 text-center hidden font-bold animate-pulse"><i class="fa-solid fa-check mr-1"></i> Erfolgreich kopiert!</p>
+        </div>
+    </div>
+
+    <!-- SCREEN 1: ROLE SELECT -->
+    <div id="screen-role" class="flex-1 flex items-center justify-center p-6">
+        <div class="glass p-8 rounded-2xl w-full max-w-md text-center shadow-2xl">
+            <div class="w-20 h-20 mx-auto mb-4 bg-gradient-to-tr from-red-600 to-deepPurple rounded-3xl flex items-center justify-center shadow-lg shadow-purple-900/40">
+                <i class="fa-solid fa-user-ninja text-4xl text-white"></i>
+            </div>
+            <h1 class="text-4xl font-extrabold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-purple-400 to-cyanAccent">IMPOSTOR</h1>
+            <p class="text-gray-400 mb-8">Finde den Spion unter euch!</p>
+            
+            <button onclick="App.initHost()" class="w-full mb-4 py-4 rounded-xl bg-deepPurple hover:bg-purple-700 text-white font-bold text-lg transition-colors btn-press flex items-center justify-center gap-3 shadow-lg shadow-purple-900/50">
+                <i class="fa-solid fa-crown"></i> Spiel erstellen (Host)
+            </button>
+            <div class="relative flex py-2 items-center">
+                <div class="flex-grow border-t border-gray-600"></div>
+                <span class="flex-shrink-0 mx-4 text-gray-500 text-sm">oder</span>
+                <div class="flex-grow border-t border-gray-600"></div>
+            </div>
+            <button onclick="App.showPlayerJoin()" class="w-full mt-4 py-4 rounded-xl bg-gray-800 hover:bg-gray-700 border border-gray-600 text-white font-bold text-lg transition-colors btn-press flex items-center justify-center gap-3">
+                <i class="fa-solid fa-gamepad"></i> Als Spieler beitreten
+            </button>
+        </div>
+    </div>
+
+    <!-- SCREEN 2: HOST LOBBY -->
+    <div id="screen-host-lobby" class="hidden flex-1 flex flex-col items-center justify-center p-6">
+        <div class="w-full max-w-5xl grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div class="glass p-8 rounded-2xl flex flex-col items-center text-center">
+                <h2 class="text-2xl font-bold mb-2">Lobby-Code</h2>
+                
+                <div onclick="Host.showCopyMenu()" title="Klicken zum Teilen" class="flex items-center justify-center gap-4 bg-gray-900 hover:bg-gray-800 border border-gray-700 hover:border-cyanAccent py-3 px-6 rounded-xl mb-6 cursor-pointer transition-all group shadow-lg">
+                    <div class="text-5xl font-extrabold tracking-widest text-cyanAccent" id="host-lobby-id">---</div>
+                    <i class="fa-regular fa-copy text-2xl text-gray-500 group-hover:text-cyanAccent transition"></i>
+                </div>
+                
+                <div class="bg-white p-2 rounded-lg mb-4">
+                    <canvas id="qr-code"></canvas>
+                </div>
+                <p class="text-sm text-gray-400">Scanne den QR-Code oder gib den Code ein.</p>
+
+                <!-- GAME OPTIONS -->
+                <div class="w-full mt-6 bg-gray-900/60 p-4 rounded-xl border border-gray-800 text-left space-y-3">
+                    <div class="flex justify-between items-center">
+                        <label class="text-sm text-gray-300 font-semibold"><i class="fa-solid fa-user-ninja text-red-400 mr-2"></i>Anzahl Impostor:</label>
+                        <select id="opt-impostor-count" class="bg-gray-800 border border-gray-700 text-white text-sm rounded-lg p-2 focus:outline-none focus:border-cyanAccent">
+                            <option value="1" selected>1 Impostor</option>
+                            <option value="2">2 Impostore</option>
+                        </select>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <label class="text-sm text-gray-300 font-semibold"><i class="fa-solid fa-hourglass-half text-cyanAccent mr-2"></i>Diskussionszeit:</label>
+                        <select id="opt-timer-sec" class="bg-gray-800 border border-gray-700 text-white text-sm rounded-lg p-2 focus:outline-none focus:border-cyanAccent">
+                            <option value="60">60 Sekunden</option>
+                            <option value="90" selected>90 Sekunden</option>
+                            <option value="120">120 Sekunden</option>
+                            <option value="0">Unbegrenzt</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="w-full flex gap-2 mt-6">
+                    <button onclick="App.toggleEditor()" class="flex-1 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold transition"><i class="fa-solid fa-pen-to-square"></i> Wörter-Editor</button>
+                    <button onclick="Host.startGame()" class="flex-1 py-3 bg-green-500 hover:bg-green-600 text-white rounded-lg font-bold transition shadow-lg shadow-green-900/50"><i class="fa-solid fa-play"></i> Starten</button>
+                </div>
+            </div>
+
+            <div class="glass p-8 rounded-2xl flex flex-col">
+                <h2 class="text-2xl font-bold mb-4 flex justify-between">
+                    <span>Spieler</span> <span class="text-cyanAccent" id="host-player-count">0/12</span>
+                </h2>
+                <div id="host-player-list" class="flex-1 overflow-y-auto space-y-3 max-h-[400px]">
+                    <div class="text-gray-500 italic text-center mt-10">Warte auf Spieler... (Mindestens 3 empfohlen)</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCREEN 3: WORD EDITOR -->
+    <div id="screen-editor" class="hidden flex-1 flex flex-col p-6 max-w-6xl mx-auto w-full">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-3xl font-bold text-cyanAccent"><i class="fa-solid fa-pen-to-square"></i> Wortpaket-Editor</h2>
+            <div class="space-x-3">
+                <button onclick="Editor.exportJSON()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg"><i class="fa-solid fa-download"></i> Export</button>
+                <button onclick="document.getElementById('import-file').click()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg"><i class="fa-solid fa-upload"></i> Import</button>
+                <input type="file" id="import-file" class="hidden" accept=".json" onchange="Editor.importJSON(event)">
+                <button onclick="App.toggleEditor()" class="px-4 py-2 bg-deepPurple hover:bg-purple-600 rounded-lg font-bold">Fertig</button>
+            </div>
+        </div>
+
+        <div class="glass p-6 rounded-2xl flex-1 overflow-y-auto">
+            <div id="editor-categories" class="space-y-6"></div>
+            <button onclick="Editor.addCategory()" class="mt-6 w-full py-4 border-2 border-dashed border-gray-600 text-gray-400 hover:border-cyanAccent hover:text-cyanAccent rounded-xl transition font-bold">
+                + Neue Kategorie hinzufügen
+            </button>
+        </div>
+    </div>
+
+    <!-- SCREEN 4: PLAYER JOIN -->
+    <div id="screen-player-join" class="hidden flex-1 flex items-center justify-center p-6">
+        <div class="glass p-8 rounded-2xl w-full max-w-md">
+            <button onclick="App.showRoleSelect()" class="text-gray-400 hover:text-white mb-6"><i class="fa-solid fa-arrow-left"></i> Zurück</button>
+            <h2 class="text-3xl font-bold mb-6 text-cyanAccent">Beitreten</h2>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Dein Name</label>
+                    <input type="text" id="player-name-input" maxlength="15" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-cyanAccent">
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Lobby-Code</label>
+                    <input type="text" id="player-lobby-input" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-cyanAccent uppercase font-mono tracking-widest">
+                </div>
+                <button onclick="Player.join()" id="btn-join" class="w-full mt-4 py-4 rounded-xl bg-cyanAccent hover:bg-cyan-400 text-darkBg font-bold text-lg transition-colors btn-press shadow-lg shadow-cyan-900/50">
+                    Verbinden
+                </button>
+            </div>
+            <p id="join-error" class="text-red-400 text-sm mt-4 hidden text-center"></p>
+        </div>
+    </div>
+
+    <!-- SCREEN 5: PLAYER WAITING -->
+    <div id="screen-player-waiting" class="hidden flex-1 flex flex-col items-center justify-center p-6 text-center">
+        <div class="glass p-8 rounded-2xl max-w-md w-full">
+            <div class="animate-bounce text-5xl text-cyanAccent mb-4"><i class="fa-solid fa-gamepad"></i></div>
+            <h2 class="text-2xl font-bold mb-2">Du bist in der Lobby!</h2>
+            <p class="text-gray-400 mb-6">Warte auf den Host, um das Spiel zu starten...</p>
+            <div class="bg-gray-900 p-4 rounded-xl border border-gray-800">
+                <span class="text-gray-500 text-xs uppercase block mb-1">Dein Name</span>
+                <span id="player-waiting-name" class="font-bold text-lg text-cyanAccent">--</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCREEN 6: GAME - WORD REVEAL (Host & Player) -->
+    <div id="screen-word-reveal" class="hidden flex-1 flex flex-col items-center justify-center p-6">
+        <div class="glass p-8 rounded-3xl w-full max-w-lg text-center flex flex-col items-center relative overflow-hidden">
+            <span id="reveal-category" class="px-4 py-1.5 rounded-full bg-purple-900/50 border border-purple-500/30 text-purple-300 text-xs font-bold uppercase tracking-widest mb-6">Kategorie: ???</span>
+            
+            <h2 class="text-xl text-gray-300 mb-4 font-semibold">Deine Geheimkarte</h2>
+
+            <!-- CARD COMPONENT -->
+            <div id="secret-card" onclick="Player.toggleCard()" class="w-full h-64 bg-gradient-to-br from-gray-800 to-gray-900 border-2 border-dashed border-gray-600 rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all p-6 select-none shadow-2xl">
+                <div id="card-front" class="flex flex-col items-center">
+                    <i class="fa-solid fa-eye-slash text-5xl text-gray-500 mb-3"></i>
+                    <p class="text-gray-400 font-bold">Tippen zum Aufdecken</p>
+                    <p class="text-xs text-gray-500 mt-2">Vor Blicken anderer schützen!</p>
+                </div>
+                <div id="card-back" class="hidden flex flex-col items-center">
+                    <div id="card-role-badge" class="mb-2 text-xs font-black uppercase px-3 py-1 rounded-md">ZIVILIST</div>
+                    <div id="card-word-text" class="text-3xl font-black text-cyanAccent tracking-wide mb-2">PIZZA</div>
+                    <p id="card-desc-text" class="text-xs text-gray-400">Versuche den Impostor durch geschickte Hinweise zu enttarnen!</p>
+                </div>
+            </div>
+
+            <button onclick="Host.proceedToCluePhase()" id="btn-host-start-clues" class="hidden mt-8 w-full py-4 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl btn-press shadow-lg">
+                Weiter zur Hinweis-Runde <i class="fa-solid fa-arrow-right ml-2"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- SCREEN 7: CLUE ROUND (Host & Player) -->
+    <div id="screen-clue-round" class="hidden flex-1 flex flex-col items-center justify-center p-6">
+        <div class="glass p-8 rounded-3xl w-full max-w-xl text-center flex flex-col items-center">
+            <span class="text-xs text-cyanAccent font-bold uppercase tracking-widest mb-2"><i class="fa-solid fa-comments"></i> Phase 1: Hinweise geben</span>
+            <h2 class="text-3xl font-extrabold mb-6">Nacheinander 1 Hinweis sagen!</h2>
+
+            <div id="active-speaker-box" class="w-full bg-gray-900/80 border-2 border-cyanAccent p-6 rounded-2xl mb-6 flex flex-col items-center animate-pulse">
+                <span class="text-xs text-gray-400 mb-1">Aktuell an der Reihe:</span>
+                <div id="active-speaker-name" class="text-4xl font-black text-cyanAccent">---</div>
+            </div>
+
+            <p class="text-gray-400 text-sm mb-6">Jeder Spieler sagt reihum genau EIN Wort oder einen kurzen Satz als Hinweis zu seinem Wort.</p>
+
+            <button onclick="Host.nextSpeaker()" id="btn-host-next-speaker" class="hidden w-full py-4 bg-deepPurple hover:bg-purple-600 text-white font-bold rounded-xl btn-press shadow-lg mb-3">
+                Nächster Spieler <i class="fa-solid fa-forward ml-2"></i>
+            </button>
+            <button onclick="Host.startDiscussionPhase()" id="btn-host-start-discussion" class="hidden w-full py-4 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl btn-press shadow-lg">
+                Diskussion & Abstimmung starten <i class="fa-solid fa-check ml-2"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- SCREEN 8: DISCUSSION & VOTING -->
+    <div id="screen-discussion-voting" class="hidden flex-1 flex flex-col items-center justify-center p-6">
+        <div class="glass p-8 rounded-3xl w-full max-w-2xl text-center flex flex-col items-center">
+            <span class="text-xs text-red-400 font-bold uppercase tracking-widest mb-2"><i class="fa-solid fa-user-secret"></i> Phase 2: Diskussion & Verdacht</span>
+            <h2 class="text-3xl font-extrabold mb-4">Wer ist der Impostor?</h2>
+
+            <!-- TIMER -->
+            <div id="discussion-timer-box" class="mb-6 flex items-center justify-center gap-2 bg-gray-900 px-6 py-2 rounded-xl border border-gray-700">
+                <i class="fa-solid fa-stopwatch text-cyanAccent text-xl"></i>
+                <span id="discussion-timer-text" class="text-3xl font-mono font-black text-cyanAccent">90s</span>
+            </div>
+
+            <!-- VOTING CONTAINER (PLAYER VIEW) -->
+            <div id="player-voting-area" class="w-full hidden">
+                <p class="text-gray-300 text-sm mb-4">Wähle den Spieler, den du verdächtigst:</p>
+                <div id="voting-grid" class="grid grid-cols-2 gap-3 max-h-[300px] overflow-y-auto p-1"></div>
+            </div>
+
+            <!-- HOST VIEW STATUS -->
+            <div id="host-voting-status" class="w-full hidden space-y-4">
+                <p class="text-gray-400 text-sm">Warte auf die Stimmen der Spieler...</p>
+                <div id="host-voted-count-badge" class="text-2xl font-bold text-cyanAccent">0 / 0 Abgestimmt</div>
+                <div id="host-voted-players-list" class="flex flex-wrap justify-center gap-2"></div>
+                <button onclick="Host.evaluateVotes()" class="w-full mt-4 py-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl btn-press shadow-lg">
+                    Abstimmung vorzeitig beenden & auswerten <i class="fa-solid fa-gavel ml-2"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCREEN 9: REVEAL RESULT -->
+    <div id="screen-reveal-result" class="hidden flex-1 flex flex-col items-center justify-center p-6">
+        <div class="glass p-8 rounded-3xl w-full max-w-lg text-center flex flex-col items-center">
+            <div id="result-icon-box" class="w-20 h-20 rounded-full flex items-center justify-center text-4xl mb-4 bg-gray-800 border-2 border-gray-700">
+                <i class="fa-solid fa-mask"></i>
+            </div>
+            
+            <h2 id="result-title" class="text-3xl font-black mb-2">Ergebnis</h2>
+            <p id="result-desc" class="text-gray-300 mb-6">Die Gruppe hat abgestimmt...</p>
+
+            <div id="result-details-box" class="w-full bg-gray-900/80 p-6 rounded-2xl border border-gray-800 mb-6 space-y-3">
+                <div class="flex justify-between border-b border-gray-800 pb-2">
+                    <span class="text-gray-400 text-sm">Rausgewählt:</span>
+                    <span id="res-voted-name" class="font-bold text-white">---</span>
+                </div>
+                <div class="flex justify-between border-b border-gray-800 pb-2">
+                    <span class="text-gray-400 text-sm">Rolle:</span>
+                    <span id="res-voted-role" class="font-bold text-red-400">---</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-400 text-sm">Das Geheimwort war:</span>
+                    <span id="res-secret-word" class="font-bold text-cyanAccent">---</span>
+                </div>
+            </div>
+
+            <!-- IMPOSTOR RECOVERY GUESS AREA (If Impostor was voted out) -->
+            <div id="impostor-guess-modal" class="hidden w-full bg-red-950/40 border border-red-500/50 p-4 rounded-xl mb-6 text-left space-y-3">
+                <p class="text-xs text-red-300 font-bold uppercase"><i class="fa-solid fa-triangle-exclamation mr-1"></i> Impostor Rettungsschuss!</p>
+                <p class="text-sm text-gray-200">Der Impostor kann das Wort noch erraten, um zu gewinnen:</p>
+                <div id="impostor-guess-options" class="grid grid-cols-2 gap-2"></div>
+            </div>
+
+            <div class="w-full flex gap-3">
+                <button onclick="Host.nextRound()" id="btn-host-next-round" class="hidden flex-1 py-4 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl btn-press shadow-lg">
+                    Nächste Runde <i class="fa-solid fa-rotate-right ml-2"></i>
+                </button>
+                <button onclick="App.endGame()" id="btn-host-end-game" class="hidden flex-1 py-4 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl btn-press shadow-lg">
+                    Siegerehrung <i class="fa-solid fa-trophy ml-2"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCREEN 10: PODIUM -->
+    <div id="screen-podium" class="hidden flex-1 flex flex-col items-center justify-center p-6 relative bg-gray-900 overflow-hidden">
+        <div class="absolute inset-0 bg-gradient-to-b from-gray-900 via-gray-800 to-black z-0"></div>
+        <h1 class="text-5xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-yellow-400 to-yellow-600 mb-10 drop-shadow-md z-10 tracking-widest uppercase text-center mt-8">Siegerehrung</h1>
+        <div id="podium-container" class="flex flex-col items-center min-h-[350px] w-full max-w-4xl z-10"></div>
+        <button onclick="location.reload()" class="mt-12 mb-6 px-8 py-4 bg-gradient-to-r from-gray-800 to-gray-700 hover:from-gray-700 hover:to-gray-600 rounded-xl font-bold text-white text-lg transition-all shadow-xl z-10 border border-gray-600 hover:scale-105"><i class="fa-solid fa-rotate-right mr-2"></i> Neues Spiel</button>
+    </div>
+
+    <!-- SCRIPT LOGIC -->
+    <script>
+        const PLAYER_COLORS = ['#EF4444', '#3B82F6', '#10B981', '#F59E0B', '#EC4899', '#8B5CF6', '#06B6D4', '#F97316', '#14B8A6', '#84CC16'];
+
+        const Sound = {
+            ctx: new (window.AudioContext || window.webkitAudioContext)(),
+            playTone(freq, type, duration, vol=0.1) {
+                if(this.ctx.state === 'suspended') this.ctx.resume();
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + duration);
+            },
+            correct() { this.playTone(600, 'sine', 0.1, 0.1); setTimeout(() => this.playTone(800, 'sine', 0.3, 0.1), 100); },
+            wrong() { this.playTone(120, 'square', 0.4, 0.2); },
+            win() { [300, 400, 500, 600, 800].forEach((f, i) => setTimeout(() => this.playTone(f, 'sine', 0.2, 0.1), i * 150)); }
+        };
+
+        const Storage = {
+            getKey: () => 'impostor_words_v1',
+            getDefaultWords() {
+                return [
+                    { name: "Essen & Trinken", words: ["Pizza", "Sushi", "Döner", "Hamburger", "Spaghetti", "Eiscreme", "Schokolade", "Tacos", "Pfannkuchen", "Pommes"] },
+                    { name: "Tiere", words: ["Löwe", "Pinguin", "Elefant", "Delphin", "Eichhörnchen", "Känguru", "Chamäleon", "Flamingo", "Eule", "Haifisch"] },
+                    { name: "Berufe", words: ["Astronaut", "Feuerwehrfrau", "Arzt", "Detektiv", "Koch", "Pilot", "Friseur", "Taucher", "Magier", "Bäcker"] },
+                    { name: "Orte & Reisen", words: ["Eiffelturm", "Pyramiden", "Freizeitpark", "Flughafen", "Strand", "Nordpol", "Kino", "Bibliothek", "Museum", "Fitnessstudio"] },
+                    { name: "Filme & Popkultur", words: ["Harry Potter", "Star Wars", "Avengers", "Die Eiskönigin", "SpongeBob", "Super Mario", "Minecraft", "Pokémon", "Shrek", "Batman"] }
+                ];
+            },
+            load() {
+                try {
+                    const data = localStorage.getItem(this.getKey());
+                    if (data) return JSON.parse(data);
+                } catch(e) {}
+                const def = this.getDefaultWords();
+                localStorage.setItem(this.getKey(), JSON.stringify(def));
+                return def;
+            },
+            save(data) { localStorage.setItem(this.getKey(), JSON.stringify(data)); }
+        };
+
+        const UI = {
+            screens: ['screen-role', 'screen-host-lobby', 'screen-editor', 'screen-player-join', 'screen-player-waiting', 'screen-word-reveal', 'screen-clue-round', 'screen-discussion-voting', 'screen-reveal-result', 'screen-podium'],
+            show(id) {
+                this.screens.forEach(s => document.getElementById(s).classList.add('hidden'));
+                document.getElementById(id).classList.remove('hidden');
+            }
+        };
+
+        const AppState = {
+            peer: null,
+            isHost: false,
+            lobbyId: null,
+            connections: {}, // peerId -> { name, color, score, vote }
+            myRole: 'civilian', // 'civilian' | 'impostor'
+            myWord: '',
+            currentCategory: '',
+            secretWord: '',
+            impostorIds: [],
+            speakerOrder: [],
+            currentSpeakerIndex: 0,
+            timerInterval: null,
+            hasVoted: false
+        };
+
+        const App = {
+            init() {
+                const urlParams = new URLSearchParams(window.location.search);
+                const code = urlParams.get('code') || urlParams.get('lobby');
+                if(code) {
+                    document.getElementById('player-lobby-input').value = code;
+                    App.showPlayerJoin();
+                } else {
+                    UI.show('screen-role');
+                }
+            },
+            showRoleSelect() { UI.show('screen-role'); },
+            showPlayerJoin() { UI.show('screen-player-join'); },
+            generateId() { return Math.random().toString(36).substring(2, 7).toUpperCase(); },
+            initHost() {
+                AppState.isHost = true;
+                AppState.lobbyId = App.generateId();
+                UI.show('screen-host-lobby');
+                document.getElementById('host-lobby-id').innerText = AppState.lobbyId;
+                
+                const joinUrl = `${window.location.origin}${window.location.pathname}?code=${AppState.lobbyId}`;
+                new QRious({
+                    element: document.getElementById('qr-code'),
+                    value: joinUrl,
+                    size: 150,
+                    backgroundAlpha: 0,
+                    foreground: '#00E5FF'
+                });
+
+                AppState.peer = new Peer(AppState.lobbyId);
+                AppState.peer.on('connection', conn => Host.handleConnection(conn));
+            },
+            toggleEditor() {
+                const editorScreen = document.getElementById('screen-editor');
+                if(editorScreen.classList.contains('hidden')) {
+                    Editor.render();
+                    UI.show('screen-editor');
+                } else {
+                    UI.show('screen-host-lobby');
+                }
+            },
+            endGame() {
+                // Nur die nötigen Daten extrahieren (ohne das conn-Objekt, um den Circular-JSON Error zu verhindern)
+                const players = Object.values(AppState.connections).map(p => ({
+                    id: p.id,
+                    name: p.name,
+                    score: p.score,
+                    color: p.color
+                }));
+                players.sort((a,b) => b.score - a.score);
+                
+                Host.broadcast({ type: 'game_over', players });
+                Host.renderPodium(players);
+            }
+        };
+
+        const Host = {
+            handleConnection(conn) {
+                conn.on('data', data => {
+                    if(data.type === 'join') {
+                        const color = PLAYER_COLORS[Object.keys(AppState.connections).length % PLAYER_COLORS.length];
+                        AppState.connections[conn.peer] = {
+                            id: conn.peer,
+                            conn: conn,
+                            name: data.name,
+                            color: color,
+                            score: 0,
+                            vote: null
+                        };
+                        Host.updatePlayerList();
+                        conn.send({ type: 'joined', color });
+                    } else if(data.type === 'submit_vote') {
+                        if(AppState.connections[conn.peer]) {
+                            AppState.connections[conn.peer].vote = data.targetId;
+                            Host.checkVotesProgress();
+                        }
+                    } else if(data.type === 'impostor_guess') {
+                        Host.handleImpostorGuess(conn.peer, data.guessedWord);
+                    }
+                });
+
+                conn.on('close', () => {
+                    delete AppState.connections[conn.peer];
+                    Host.updatePlayerList();
+                });
+            },
+            updatePlayerList() {
+                const container = document.getElementById('host-player-list');
+                const players = Object.values(AppState.connections);
+                document.getElementById('host-player-count').innerText = `${players.length}/12`;
+
+                if(players.length === 0) {
+                    container.innerHTML = `<div class="text-gray-500 italic text-center mt-10">Warte auf Spieler...</div>`;
+                    return;
+                }
+
+                container.innerHTML = players.map(p => `
+                    <div class="flex justify-between items-center bg-gray-900/60 p-3 rounded-xl border border-gray-800">
+                        <div class="flex items-center gap-3">
+                            <div class="w-4 h-4 rounded-full" style="background-color: ${p.color}"></div>
+                            <span class="font-bold">${p.name}</span>
+                        </div>
+                        <span class="text-sm font-mono text-cyanAccent">${p.score} Pkt</span>
+                    </div>
+                `).join('');
+            },
+            broadcast(msg) {
+                Object.values(AppState.connections).forEach(p => p.conn && p.conn.send(msg));
+            },
+            startGame() {
+                const players = Object.values(AppState.connections);
+                if(players.length < 2 && !confirm("Zu wenige Spieler. Trotzdem starten?")) return;
+
+                const wordsData = Storage.load();
+                const randomCat = wordsData[Math.floor(Math.random() * wordsData.length)];
+                AppState.currentCategory = randomCat.name;
+                AppState.secretWord = randomCat.words[Math.floor(Math.random() * randomCat.words.length)];
+
+                // Pick Impostors
+                const countOption = parseInt(document.getElementById('opt-impostor-count').value) || 1;
+                const shuffledIds = players.map(p => p.id).sort(() => Math.random() - 0.5);
+                AppState.impostorIds = shuffledIds.slice(0, Math.min(countOption, players.length - 1));
+
+                // Reset votes
+                players.forEach(p => p.vote = null);
+                AppState.hasVoted = false;
+
+                // Send roles to players
+                players.forEach(p => {
+                    const isImp = AppState.impostorIds.includes(p.id);
+                    p.conn.send({
+                        type: 'word_assigned',
+                        category: AppState.currentCategory,
+                        word: isImp ? '???' : AppState.secretWord,
+                        isImpostor: isImp
+                    });
+                });
+
+                // Host View
+                UI.show('screen-word-reveal');
+                document.getElementById('reveal-category').innerText = `Kategorie: ${AppState.currentCategory}`;
+                document.getElementById('card-word-text').innerText = AppState.secretWord;
+                document.getElementById('card-role-badge').innerText = "HOST (ZUSCHAUER)";
+                document.getElementById('btn-host-start-clues').classList.remove('hidden');
+            },
+            proceedToCluePhase() {
+                const players = Object.values(AppState.connections);
+                AppState.speakerOrder = players.map(p => p.id).sort(() => Math.random() - 0.5);
+                AppState.currentSpeakerIndex = 0;
+
+                Host.broadcast({
+                    type: 'clue_phase_started',
+                    speakerOrder: AppState.speakerOrder.map(id => AppState.connections[id].name)
+                });
+
+                UI.show('screen-clue-round');
+                document.getElementById('btn-host-next-speaker').classList.remove('hidden');
+                document.getElementById('btn-host-start-discussion').classList.remove('hidden');
+                Host.updateSpeakerDisplay();
+            },
+            updateSpeakerDisplay() {
+                const currentId = AppState.speakerOrder[AppState.currentSpeakerIndex];
+                const speakerName = currentId && AppState.connections[currentId] ? AppState.connections[currentId].name : "Niemand";
+                document.getElementById('active-speaker-name').innerText = speakerName;
+            },
+            nextSpeaker() {
+                AppState.currentSpeakerIndex = (AppState.currentSpeakerIndex + 1) % AppState.speakerOrder.length;
+                Host.updateSpeakerDisplay();
+            },
+            startDiscussionPhase() {
+                const timerSec = parseInt(document.getElementById('opt-timer-sec').value);
+                const playersList = Object.values(AppState.connections).map(p => ({ id: p.id, name: p.name, color: p.color }));
+
+                Host.broadcast({
+                    type: 'discussion_started',
+                    duration: timerSec,
+                    players: playersList
+                });
+
+                UI.show('screen-discussion-voting');
+                document.getElementById('host-voting-status').classList.remove('hidden');
+                document.getElementById('player-voting-area').classList.add('hidden');
+                Host.updateHostVotingStatus();
+
+                if(timerSec > 0) {
+                    let left = timerSec;
+                    document.getElementById('discussion-timer-text').innerText = `${left}s`;
+                    clearInterval(AppState.timerInterval);
+                    AppState.timerInterval = setInterval(() => {
+                        left--;
+                        document.getElementById('discussion-timer-text').innerText = `${left}s`;
+                        if(left <= 0) {
+                            clearInterval(AppState.timerInterval);
+                            Sound.wrong();
+                            Host.evaluateVotes();
+                        }
+                    }, 1000);
+                } else {
+                    document.getElementById('discussion-timer-text').innerText = `Unbegrenzt`;
+                }
+            },
+            checkVotesProgress() {
+                Host.updateHostVotingStatus();
+                const players = Object.values(AppState.connections);
+                const votedCount = players.filter(p => p.vote !== null).length;
+                if(votedCount >= players.length && players.length > 0) {
+                    clearInterval(AppState.timerInterval);
+                    setTimeout(() => Host.evaluateVotes(), 800);
+                }
+            },
+            updateHostVotingStatus() {
+                const players = Object.values(AppState.connections);
+                const votedCount = players.filter(p => p.vote !== null).length;
+                document.getElementById('host-voted-count-badge').innerText = `${votedCount} / ${players.length} Abgestimmt`;
+                document.getElementById('host-voted-players-list').innerHTML = players.map(p => `
+                    <span class="px-3 py-1 rounded-full border text-xs font-bold ${p.vote ? 'bg-green-900/50 border-green-500 text-green-300' : 'bg-gray-800 border-gray-700 text-gray-500'}">
+                        ${p.name} ${p.vote ? '✓' : ''}
+                    </span>
+                `).join('');
+            },
+            evaluateVotes() {
+                clearInterval(AppState.timerInterval);
+                const players = Object.values(AppState.connections);
+                const voteCounts = {};
+                players.forEach(p => {
+                    if(p.vote) voteCounts[p.vote] = (voteCounts[p.vote] || 0) + 1;
+                });
+
+                let maxVotes = 0;
+                let eliminatedId = null;
+                Object.keys(voteCounts).forEach(id => {
+                    if(voteCounts[id] > maxVotes) {
+                        maxVotes = voteCounts[id];
+                        eliminatedId = id;
+                    }
+                });
+
+                const eliminatedPlayer = AppState.connections[eliminatedId];
+                const isImpostor = eliminatedId && AppState.impostorIds.includes(eliminatedId);
+
+                // Scoring calculation
+                if(isImpostor) {
+                    players.forEach(p => {
+                        if(!AppState.impostorIds.includes(p.id)) p.score += 100;
+                    });
+                } else {
+                    AppState.impostorIds.forEach(impId => {
+                        if(AppState.connections[impId]) AppState.connections[impId].score += 200;
+                    });
+                }
+
+                Host.broadcast({
+                    type: 'round_result',
+                    votedName: eliminatedPlayer ? eliminatedPlayer.name : "Niemand",
+                    isImpostor: isImpostor,
+                    secretWord: AppState.secretWord,
+                    impostorNames: AppState.impostorIds.map(id => AppState.connections[id]?.name).join(', ')
+                });
+
+                UI.show('screen-reveal-result');
+                document.getElementById('res-voted-name').innerText = eliminatedPlayer ? eliminatedPlayer.name : "Niemand";
+                document.getElementById('res-voted-role').innerText = isImpostor ? "IMPOSTOR! 🔴" : "ZIVILIST 🟢";
+                document.getElementById('res-voted-role').className = isImpostor ? "font-bold text-red-500" : "font-bold text-green-400";
+                document.getElementById('res-secret-word').innerText = AppState.secretWord;
+                document.getElementById('btn-host-next-round').classList.remove('hidden');
+                document.getElementById('btn-host-end-game').classList.remove('hidden');
+
+                if(isImpostor) Sound.correct(); else Sound.wrong();
+            },
+            nextRound() { Host.startGame(); },
+            showCopyMenu() { document.getElementById('copy-modal').classList.remove('hidden'); },
+            copyToClipboard(type) {
+                const text = type === 'code' ? AppState.lobbyId : AppState.inviteLink;
+                navigator.clipboard.writeText(text);
+                const fb = document.getElementById('copy-feedback');
+                fb.classList.remove('hidden');
+                setTimeout(() => fb.classList.add('hidden'), 2000);
+            },
+            renderPodium(players) {
+                UI.show('screen-podium');
+
+                // Konfetti-Kanonen abfeuern
+                if (typeof confetti === 'function') {
+                    confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+                }
+                Sound.win();
+
+                const container = document.getElementById('podium-container');
+                if (!players || players.length === 0) return;
+
+                // Anordnung für das Podest: Platz 2 (Links), Platz 1 (Mitte), Platz 3 (Rechts)
+                const podiumOrder = [];
+                if (players[1]) podiumOrder.push({ ...players[1], rank: 2, height: 'h-40', bg: 'from-gray-400 to-gray-600', border: 'border-slate-300' });
+                if (players[0]) podiumOrder.push({ ...players[0], rank: 1, height: 'h-56', bg: 'from-yellow-400 to-amber-600', border: 'border-yellow-200', winner: true });
+                if (players[2]) podiumOrder.push({ ...players[2], rank: 3, height: 'h-32', bg: 'from-amber-700 to-amber-900', border: 'border-amber-600' });
+
+                // Restliche Spieler ab Platz 4
+                const rest = players.slice(3);
+
+                container.innerHTML = `
+                    <div class="flex items-end justify-center gap-3 md:gap-6 w-full max-w-lg mb-8">
+                        ${podiumOrder.map(p => `
+                            <div class="flex flex-col items-center flex-1">
+                                <div class="font-black text-sm md:text-lg text-cyanAccent mb-2 truncate max-w-[100px] text-center">
+                                    ${p.winner ? '👑<br>' : ''}${p.name}
+                                </div>
+                                <div class="w-full ${p.height} bg-gradient-to-b ${p.bg} border-t-4 ${p.border} rounded-t-2xl flex flex-col items-center justify-center text-white font-black shadow-2xl relative">
+                                    <span class="text-3xl md:text-5xl drop-shadow">${p.rank}</span>
+                                    <span class="text-xs md:text-sm font-extrabold mt-1 opacity-90">${p.score} Pkt</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    ${rest.length > 0 ? `
+                        <div class="w-full max-w-md bg-gray-900/80 p-4 rounded-xl border border-gray-800 space-y-2">
+                            <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest text-center mb-3">Weitere Platzierungen</h3>
+                            ${rest.map((p, i) => `
+                                <div class="flex justify-between items-center text-sm px-3 py-1.5 bg-gray-800/50 rounded-lg">
+                                    <span class="text-gray-400 font-bold">#${i + 4} ${p.name}</span>
+                                    <span class="text-cyanAccent font-bold">${p.score} Pkt</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                `;
+            }
+        };
+
+        const Player = {
+            join() {
+                const name = document.getElementById('player-name-input').value.trim();
+                const code = document.getElementById('player-lobby-input').value.trim().toUpperCase();
+                if(!name || !code) return alert("Bitte Namen und Code eingeben!");
+
+                AppState.peer = new Peer();
+                AppState.peer.on('open', () => {
+                    const conn = AppState.peer.connect(code);
+                    AppState.hostConn = conn;
+
+                    conn.on('open', () => {
+                        conn.send({ type: 'join', name });
+                    });
+
+                    conn.on('data', data => Player.handleHostData(data));
+                });
+            },
+            handleHostData(data) {
+                if(data.type === 'joined') {
+                    UI.show('screen-player-waiting');
+                    document.getElementById('player-waiting-name').innerText = document.getElementById('player-name-input').value;
+                } else if(data.type === 'word_assigned') {
+                    AppState.myRole = data.isImpostor ? 'impostor' : 'civilian';
+                    AppState.myWord = data.word;
+                    AppState.currentCategory = data.category;
+                    AppState.hasVoted = false; // Reset vote status for the new round
+
+                    UI.show('screen-word-reveal');
+                    document.getElementById('reveal-category').innerText = `Kategorie: ${data.category}`;
+                    document.getElementById('card-word-text').innerText = data.word;
+                    
+                    const badge = document.getElementById('card-role-badge');
+                    if(data.isImpostor) {
+                        badge.innerText = "DU BIST DER IMPOSTOR! 🤫";
+                        badge.className = "mb-2 text-xs font-black uppercase px-3 py-1 rounded-md bg-red-600 text-white";
+                        document.getElementById('card-desc-text').innerText = "Täusche alle anderen und finde heraus, wie das Wort heißt!";
+                    } else {
+                        badge.innerText = "ZIVILIST 🟢";
+                        badge.className = "mb-2 text-xs font-black uppercase px-3 py-1 rounded-md bg-green-600 text-white";
+                        document.getElementById('card-desc-text').innerText = "Finde den Impostor, indem du gute Hinweise gibst!";
+                    }
+                } else if(data.type === 'clue_phase_started') {
+                    UI.show('screen-clue-round');
+                    document.getElementById('btn-host-next-speaker').classList.add('hidden');
+                    document.getElementById('btn-host-start-discussion').classList.add('hidden');
+                } else if(data.type === 'discussion_started') {
+                    UI.show('screen-discussion-voting');
+                    document.getElementById('host-voting-status').classList.add('hidden');
+                    document.getElementById('player-voting-area').classList.remove('hidden');
+                    Player.renderVotingGrid(data.players);
+                } else if(data.type === 'round_result') {
+                    UI.show('screen-reveal-result');
+                    document.getElementById('res-voted-name').innerText = data.votedName;
+                    document.getElementById('res-voted-role').innerText = data.isImpostor ? "IMPOSTOR! 🔴" : "ZIVILIST 🟢";
+                    document.getElementById('res-voted-role').className = data.isImpostor ? "font-bold text-red-500" : "font-bold text-green-400";
+                    document.getElementById('res-secret-word').innerText = data.secretWord;
+                } else if(data.type === 'game_over') {
+                    Host.renderPodium(data.players);
+                }
+            },
+            toggleCard() {
+                const front = document.getElementById('card-front');
+                const back = document.getElementById('card-back');
+                front.classList.toggle('hidden');
+                back.classList.toggle('hidden');
+            },
+            renderVotingGrid(players) {
+                const grid = document.getElementById('voting-grid');
+                grid.innerHTML = players.map(p => `
+                    <button onclick="Player.vote('${p.id}', this)" class="py-3 px-4 bg-gray-800 hover:bg-cyan-600/30 border border-gray-700 rounded-xl font-bold text-white transition btn-press flex items-center justify-between">
+                        <span>${p.name}</span>
+                        <i class="fa-solid fa-check text-cyanAccent opacity-0 check-icon"></i>
+                    </button>
+                `).join('');
+            },
+            vote(targetId, btnEl) {
+                if(AppState.hasVoted) return;
+                AppState.hasVoted = true;
+                AppState.hostConn.send({ type: 'submit_vote', targetId });
+                btnEl.classList.add('border-cyanAccent', 'bg-cyan-950/50');
+                btnEl.querySelector('.check-icon').classList.remove('opacity-0');
+            }
+        };
+
+        const Editor = {
+            render() {
+                const container = document.getElementById('editor-categories');
+                const wordsData = Storage.load();
+                container.innerHTML = wordsData.map((cat, cIdx) => `
+                    <div class="bg-gray-900/60 p-5 rounded-xl border border-gray-800 space-y-3 relative">
+                        <button onclick="Editor.deleteCategory(${cIdx})" class="absolute top-4 right-4 text-red-500 hover:text-red-400 text-sm font-bold"><i class="fa-solid fa-trash"></i></button>
+                        <div>
+                            <label class="text-xs text-cyanAccent font-bold">Kategorie Name</label>
+                            <input type="text" value="${cat.name}" onchange="Editor.updateCategoryName(${cIdx}, this.value)" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white font-bold focus:outline-none focus:border-cyanAccent">
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-400 font-bold">Wörter (kommagetrennt)</label>
+                            <textarea onchange="Editor.updateCategoryWords(${cIdx}, this.value)" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-cyanAccent h-20">${cat.words.join(', ')}</textarea>
+                        </div>
+                    </div>
+                `).join('');
+            },
+            addCategory() {
+                const data = Storage.load();
+                data.push({ name: "Neue Kategorie", words: ["Wort 1", "Wort 2", "Wort 3"] });
+                Storage.save(data);
+                Editor.render();
+            },
+            deleteCategory(idx) {
+                const data = Storage.load();
+                data.splice(idx, 1);
+                Storage.save(data);
+                Editor.render();
+            },
+            updateCategoryName(idx, val) {
+                const data = Storage.load();
+                data[idx].name = val.trim();
+                Storage.save(data);
+            },
+            updateCategoryWords(idx, val) {
+                const data = Storage.load();
+                data[idx].words = val.split(',').map(w => w.trim()).filter(w => w.length > 0);
+                Storage.save(data);
+            },
+            exportJSON() {
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(Storage.load(), null, 2));
+                const a = document.createElement('a');
+                a.setAttribute("href", dataStr);
+                a.setAttribute("download", "impostor_woerter.json");
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+            },
+            importJSON(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const parsed = JSON.parse(e.target.result);
+                        if (Array.isArray(parsed)) {
+                            Storage.save(parsed);
+                            Editor.render();
+                            alert("✅ Wortpaket erfolgreich geladen!");
+                        }
+                    } catch(err) { alert("❌ Ungültige Datei!"); }
+                };
+                reader.readAsText(file);
+            }
+        };
+
+        window.onload = () => App.init();
+    </script>
+</body>
+</html>
